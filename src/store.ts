@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AppData, Exercise, Template, Workout } from './types';
+import type { AppData, Exercise, Level, Template, Workout } from './types';
 import { DEFAULT_EXERCISES, mergeDefaultExercises } from './exercises';
 
 export { DEFAULT_EXERCISES };
@@ -27,6 +27,7 @@ export function parseData(raw: unknown): AppData {
     exercises: mergeDefaultExercises(d.exercises),
     workouts: d.workouts,
     templates: Array.isArray(d.templates) ? d.templates : [],
+    level: d.level,
   };
 }
 
@@ -85,7 +86,23 @@ export function useAppData() {
     setData((d) => ({ ...d, templates: d.templates.filter((t) => t.id !== id) }));
   }, []);
 
-  return { data, upsertWorkout, deleteWorkout, addExercise, replaceAll, saveTemplate, deleteTemplate };
+  const updateExercise = useCallback((id: string, patch: Partial<Exercise>) => {
+    setData((d) => ({ ...d, exercises: d.exercises.map((e) => (e.id === id ? { ...e, ...patch } : e)) }));
+  }, []);
+
+  const setLevel = useCallback((level: Level) => setData((d) => ({ ...d, level })), []);
+
+  return {
+    data,
+    upsertWorkout,
+    deleteWorkout,
+    addExercise,
+    replaceAll,
+    saveTemplate,
+    deleteTemplate,
+    updateExercise,
+    setLevel,
+  };
 }
 
 export function exportData(data: AppData) {

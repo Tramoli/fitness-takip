@@ -11,7 +11,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { AppData } from '../types';
+import { format } from 'date-fns';
+import type { AppData, Exercise, Level } from '../types';
+import { LEVELS, exerciseScore, programScore, recommend, repRange } from '../overload';
 import { exerciseProgress, formatKg, personalRecords, weeklyVolume } from '../stats';
 import { midDate, shortDate } from '../format';
 import { groupColor } from '../exercises';
@@ -24,7 +26,66 @@ const tooltipStyle = {
   color: 'var(--text)',
 };
 
-export default function Progress({ data }: { data: AppData }) {
+interface Props {
+  data: AppData;
+  updateExercise: (id: string, patch: Partial<Exercise>) => void;
+  setLevel: (l: Level) => void;
+}
+
+const FAR_FUTURE = '9999-12-31';
+
+function Meter({ value, max }: { value: number; max: number }) {
+  return (
+    <span className="meter" aria-hidden>
+      <span style={{ width: `${Math.round((value / max) * 100)}%` }} />
+    </span>
+  );
+}
+
+function RangeEdit({ range, onSave }: { range: [number, number]; onSave: (lo: number, hi: number) => void }) {
+  const [lo, setLo] = useState(String(range[0]));
+  const [hi, setHi] = useState(String(range[1]));
+  const commit = () => {
+    const a = parseInt(lo, 10);
+    const b = parseInt(hi, 10);
+    if (!(a > 0 && b > 0 && a < 50 && b < 50)) {
+      setLo(String(range[0]));
+      setHi(String(range[1]));
+      return;
+    }
+    const [x, y] = a <= b ? [a, b] : [b, a];
+    if (x !== range[0] || y !== range[1]) onSave(x, y);
+  };
+  const field = (value: string, set: (v: string) => void, label: string) => (
+    <input
+      inputMode="numeric"
+      value={value}
+      onFocus={(e) => e.target.select()}
+      onChange={(e) => set(e.target.value.replace(/\D/g, ''))}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+      aria-label={label}
+    />
+  );
+  return (
+    <div className="range-edit">
+      <span>Hedef tekrar aralığı</span>
+      {field(lo, setLo, 'En az tekrar')}
+      <span aria-hidden>–</span>
+      {field(hi, setHi, 'En çok tekrar')}
+    </div>
+  );
+}
+
+const scoreWord = (n: number) => (n >= 85 ? 'Çok iyi' : n >= 70 ? 'İyi' : n >= 50 ? 'Orta' : 'Geliştirilmeli');
+
+export default function Progress({ data, updateExercise, setLevel }: Props) {
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const level: Level = data.level ?? 'intermediate';
+  const program = useMemo(
+    () => programScore(data.exercises, data.workouts, today, level),
+    [data.exercises, data.workouts, today, level],
+  );
   // Kayıtlı hareketler, en çok yapılandan aza
   const used = useMemo(() => {
     const count = new Map<string, number>();
@@ -39,7 +100,11 @@ export default function Progress({ data }: { data: AppData }) {
 
   const [selected, setSelected] = useState<string>('');
   const exId = used.some((u) => u.id === selected) ? selected : used[0]?.id;
-  const exGroup = data.exercises.find((e) => e.id === exId)?.muscleGroup;
+  const ex = data.exercises.find((e) => e.id === exId);
+  const exGroup = ex?.muscleGroup;
+  const exScore = useMemo(() => (ex ? exerciseScore(ex, data.workouts, today) : null), [ex, data.workouts, today]);
+  const next = useMemo(() => (ex ? recommend(ex, data.workouts, FAR_FUTURE) : null), [ex, data.workouts]);
+  const range = ex ? repRange(ex) : ([8, 12] as [number, number]);
 
   const points = useMemo(() => (exId ? exerciseProgress(data.workouts, exId) : []), [data.workouts, exId]);
   const pr = useMemo(() => (exId ? personalRecords(data.workouts, exId) : undefined), [data.workouts, exId]);
@@ -64,6 +129,73 @@ export default function Progress({ data }: { data: AppData }) {
   return (
     <section className="page">
       <h1 className="page-title">İlerleme</h1>
+
+      <div className="panel score-panel">
+        <div className="score-head">
+          <div>
+            <h2 className="chart-title">Program skoru</h2>
+            <p className="muted small">Son 4 hafta, progresif overload kurallarına göre</p>
+          </div>
+          <select
+            className="level-select"
+            value={level}
+            onChange={(e) => setLevel(e.target.value as Level)}
+            aria-label="Deneyim seviyesi"
+          >
+            {(Object.keys(LEVELS) as Level[]).map((l) => (
+              <option key={l} value={l}>
+                {LEVELS[l].label} seviye
+              </option>
+            ))}
+          </select>
+        </div>
+        {program ? (
+          <>
+            <div className="hero-stat">
+              <span className="hero-num">{program.score}</span>
+              <span className="hero-unit">/ 100</span>
+              <p className="hero-caption">{scoreWord(program.score)}</p>
+            </div>
+            <ul className="parts">
+              {program.parts.map((p) => (
+                <li key={p.key}>
+                  <span className="part-label">{p.label}</span>
+                  <Meter value={p.value} max={p.max} />
+                  <span className="part-val">
+                    {p.value}/{p.max}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <ul className="insights">
+              {program.insights.map((i, k) => (
+                <li key={k} className={`insight ${i.tone}`}>
+                  {i.text}
+                </li>
+              ))}
+            </ul>
+            {program.weekly.length > 0 && (
+              <details className="weekly-sets">
+                <summary>
+                  Kas grubu başına haftalık set (hedef {program.weekly[0].target[0]}–{program.weekly[0].target[1]})
+                </summary>
+                <ul>
+                  {program.weekly.map((g) => (
+                    <li key={g.group} style={{ ['--plate' as string]: groupColor(g.group) }}>
+                      <span className="plate-dot" aria-hidden />
+                      <span className="wk-group">{g.group}</span>
+                      <span className="muted small">{formatKg(g.sessionsPerWeek)}×/hafta</span>
+                      <b>{formatKg(g.sets)} set</b>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </>
+        ) : (
+          <p className="muted">Skor için son 4 haftada en az 2 antrenman gerekiyor.</p>
+        )}
+      </div>
 
       <div className="panel" style={{ ['--plate' as string]: groupColor(exGroup) }}>
         <select className="lift-select" value={exId} onChange={(e) => setSelected(e.target.value)} aria-label="Hareket">
@@ -99,6 +231,49 @@ export default function Progress({ data }: { data: AppData }) {
               </div>
             </dl>
           </>
+        )}
+
+        {next && (
+          <div className={`rec rec-${next.kind} next-rec`}>
+            <div className="rec-head">
+              <span className="rec-label">Sonraki antrenman</span>
+              {next.sets.length > 0 && <span className="rec-title">{next.title}</span>}
+            </div>
+            <p className="rec-reason">{next.reason}</p>
+          </div>
+        )}
+
+        {exScore ? (
+          <div className="ex-score">
+            <div className="ex-score-num">
+              <span className="num">{exScore.score}</span>
+              <span className="muted small">hareket skoru</span>
+            </div>
+            <ul className="parts compact">
+              <li>
+                <span className="part-label">İlerleme ({exScore.change > 0 ? '+' : ''}{formatKg(exScore.change)}%)</span>
+                <Meter value={exScore.progression} max={50} />
+              </li>
+              <li>
+                <span className="part-label">Düzenlilik ({exScore.sessions} seans)</span>
+                <Meter value={exScore.consistency} max={25} />
+              </li>
+              <li>
+                <span className="part-label">Aralıkta kalma</span>
+                <Meter value={exScore.inRange} max={25} />
+              </li>
+            </ul>
+          </div>
+        ) : (
+          <p className="muted small">Hareket skoru için son 6 haftada en az 2 seans gerekiyor.</p>
+        )}
+
+        {ex && (
+          <RangeEdit
+            key={ex.id}
+            range={range}
+            onSave={(lo, hi) => updateExercise(ex.id, { repMin: lo, repMax: hi })}
+          />
         )}
 
         <h3 className="chart-title">Ağırlık gelişimi</h3>

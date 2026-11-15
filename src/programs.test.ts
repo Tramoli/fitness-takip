@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { draftFromTemplateExercise, recentWorkouts, templateFromWorkout } from './programs';
+import type { Exercise } from './types';
 import type { Workout } from './types';
 
 const workouts: Workout[] = [
@@ -30,6 +31,18 @@ describe('draftFromTemplateExercise', () => {
     expect(draftFromTemplateExercise({ exerciseId: 'row', sets: 2, reps: 12 }, workouts, '2026-11-15')).toEqual([
       { kg: '', reps: '12' },
       { kg: '', reps: '12' },
+    ]);
+  });
+});
+
+describe('draftFromTemplateExercise + öneri', () => {
+  it('geçmiş varsa progresif overload önerisini kullanır, set sayısı programdan', () => {
+    const bench: Exercise = { id: 'bench', name: 'Bench', muscleGroup: 'Göğüs', repMin: 6, repMax: 8 };
+    // Son seans: 70×8, 70×6 → aralık içinde, +1 tekrar: 70×8 (üst sınır), 70×7
+    expect(draftFromTemplateExercise({ exerciseId: 'bench', sets: 3, reps: 12 }, workouts, '2026-11-15', bench)).toEqual([
+      { kg: '70', reps: '8' },
+      { kg: '70', reps: '7' },
+      { kg: '70', reps: '7' },
     ]);
   });
 });

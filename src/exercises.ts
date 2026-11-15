@@ -219,7 +219,8 @@ export function mergeDefaultExercises(stored: Exercise[]): Exercise[] {
   const seen = new Set<string>();
   const merged = stored.map((e) => {
     seen.add(e.id);
-    return defaults.get(e.id) ?? e;
+    const d = defaults.get(e.id);
+    return d ? { ...d, repMin: e.repMin, repMax: e.repMax } : e;
   });
   for (const d of DEFAULT_EXERCISES) if (!seen.has(d.id)) merged.push(d);
   return merged;

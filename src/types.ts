@@ -2,6 +2,9 @@ export interface Exercise {
   id: string;
   name: string;
   muscleGroup?: string;
+  /** Çift ilerleme için hedef tekrar aralığı (boşsa hareket türüne göre varsayılan). */
+  repMin?: number;
+  repMax?: number;
 }
 
 export interface SetEntry {
@@ -13,6 +16,8 @@ export interface WorkoutExercise {
   exerciseId: string;
   sets: SetEntry[];
   note?: string;
+  /** Son sette yedekte kalan tekrar (RIR). 4 = 4 ve üzeri. */
+  rir?: number;
 }
 
 export interface Workout {
@@ -41,4 +46,8 @@ export interface AppData {
   exercises: Exercise[];
   workouts: Workout[];
   templates: Template[];
+  /** Antrenman deneyimi: haftalık hacim ve deload hedeflerini belirler. */
+  level?: Level;
 }
+
+export type Level = 'beginner' | 'intermediate' | 'advanced';

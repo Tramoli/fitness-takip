@@ -14,6 +14,7 @@ import {
   type DraftSet,
 } from '../programs';
 import ExerciseSearch from '../ExerciseSearch';
+import { recommend, type Recommendation } from '../overload';
 import {
   IconCheck,
   IconChevronLeft,
@@ -43,7 +44,10 @@ interface DraftExercise {
   key: string;
   exerciseId: string;
   sets: DraftSet[];
+  rir?: number;
 }
+
+const RIR_OPTIONS = [0, 1, 2, 3, 4];
 
 const toNum = (s: string) => {
   const n = Number(s.replace(',', '.'));
@@ -70,11 +74,12 @@ export default function LogWorkout({
       key: newId(),
       exerciseId: we.exerciseId,
       sets: draftFromSets(we.sets),
+      rir: we.rir,
     }));
     const extra = (startTemplate?.exercises ?? []).map((te) => ({
       key: newId(),
       exerciseId: te.exerciseId,
-      sets: draftFromTemplateExercise(te, data.workouts, date),
+      sets: draftFromTemplateExercise(te, data.workouts, date, data.exercises.find((e) => e.id === te.exerciseId)),
     }));
     return [...base, ...extra];
   });
@@ -99,6 +104,7 @@ export default function LogWorkout({
       exercises: items.map((it) => ({
         exerciseId: it.exerciseId,
         sets: it.sets.map((s) => ({ kg: toNum(s.kg), reps: Math.round(toNum(s.reps)) })),
+        ...(it.rir !== undefined ? { rir: it.rir } : {}),
       })),
     });
   }, [items, note, date, workoutId, upsertWorkout]);
@@ -113,6 +119,15 @@ export default function LogWorkout({
   const exById = useMemo(() => new Map(data.exercises.map((e) => [e.id, e])), [data.exercises]);
   const datesWithWorkout = useMemo(() => new Set(data.workouts.map((w) => w.date)), [data.workouts]);
   const recent = useMemo(() => recentWorkouts(data.workouts, date, 3), [data.workouts, date]);
+  // Her hareket için bu güne kadarki geçmişe göre progresif overload önerisi.
+  const recs = useMemo(() => {
+    const m = new Map<string, Recommendation>();
+    for (const it of items) {
+      const ex = exById.get(it.exerciseId);
+      if (ex && !m.has(ex.id)) m.set(ex.id, recommend(ex, data.workouts, date));
+    }
+    return m;
+  }, [items, exById, data.workouts, date]);
 
   const groups = useMemo(() => {
     const map = new Map<string, Exercise[]>();
@@ -134,16 +149,25 @@ export default function LogWorkout({
   );
 
   const addItem = (exerciseId: string) => {
+    // Geçmiş varsa önerilen setlerle, yoksa tek boş setle başla.
+    const ex = exById.get(exerciseId);
+    const rec = ex ? recommend(ex, data.workouts, date) : undefined;
     const last = lastSetsFor(data.workouts, exerciseId, date);
     const first = last?.sets[0];
+    const sets = rec?.sets.length
+      ? draftFromSets(rec.sets)
+      : [{ kg: first ? String(first.kg) : '', reps: first ? String(first.reps) : '' }];
     const key = newId();
     focusRef.current = `${key}-0-kg`;
-    setItems((xs) => [
-      ...xs,
-      { key, exerciseId, sets: [{ kg: first ? String(first.kg) : '', reps: first ? String(first.reps) : '' }] },
-    ]);
+    setItems((xs) => [...xs, { key, exerciseId, sets }]);
     setPicker('');
   };
+
+  const applyRec = (key: string, rec: Recommendation) =>
+    setItems((xs) => xs.map((it) => (it.key === key ? { ...it, sets: draftFromSets(rec.sets) } : it)));
+
+  const setRir = (key: string, rir: number) =>
+    setItems((xs) => xs.map((it) => (it.key === key ? { ...it, rir: it.rir === rir ? undefined : rir } : it)));
 
   const copyWorkout = (w: Workout) =>
     setItems((xs) => [
@@ -157,7 +181,7 @@ export default function LogWorkout({
       ...t.exercises.map((te) => ({
         key: newId(),
         exerciseId: te.exerciseId,
-        sets: draftFromTemplateExercise(te, data.workouts, date),
+        sets: draftFromTemplateExercise(te, data.workouts, date, exById.get(te.exerciseId)),
       })),
     ]);
 
@@ -394,6 +418,28 @@ export default function LogWorkout({
                 </button>
               </div>
             </header>
+            {(() => {
+              const rec = recs.get(it.exerciseId);
+              if (!rec) return null;
+              const matches =
+                rec.sets.length > 0 &&
+                rec.sets.length === it.sets.length &&
+                rec.sets.every((r, j) => toNum(it.sets[j].kg) === r.kg && Math.round(toNum(it.sets[j].reps)) === r.reps);
+              return (
+                <div className={`rec rec-${rec.kind}`}>
+                  <div className="rec-head">
+                    <span className="rec-label">{rec.kind === 'start' ? 'Başlangıç' : 'Bugünkü hedef'}</span>
+                    {rec.sets.length > 0 && <span className="rec-title">{rec.title}</span>}
+                    {rec.sets.length > 0 && !matches && (
+                      <button className="rec-apply" onClick={() => applyRec(it.key, rec)}>
+                        Uygula
+                      </button>
+                    )}
+                  </div>
+                  <p className="rec-reason">{rec.reason}</p>
+                </div>
+              );
+            })()}
             {last && (
               <p className="last-time">
                 Son seferde, {shortDate(last.date)}:{' '}
@@ -444,6 +490,21 @@ export default function LogWorkout({
             <button className="add-set" onClick={() => addSet(it.key)}>
               <IconPlus width={18} height={18} /> Set ekle
             </button>
+            <div className="rir" role="group" aria-label="Son sette yedekte kalan tekrar">
+              <span className="rir-label">Son sette kaç tekrar daha yapabilirdin?</span>
+              <div className="rir-options">
+                {RIR_OPTIONS.map((n) => (
+                  <button
+                    key={n}
+                    className={it.rir === n ? 'on' : ''}
+                    aria-pressed={it.rir === n}
+                    onClick={() => setRir(it.key, n)}
+                  >
+                    {n === 4 ? '4+' : n}
+                  </button>
+                ))}
+              </div>
+            </div>
           </article>
         );
       })}
