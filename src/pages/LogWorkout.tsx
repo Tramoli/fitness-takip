@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { addDays, differenceInCalendarDays, eachDayOfInterval, endOfISOWeek, format, parseISO, startOfISOWeek } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import type { AppData, Exercise, Template, Workout } from '../types';
+import type { AppData, Exercise, Template, Unit, Workout } from '../types';
 import { newId } from '../store';
 import { groupColor } from '../exercises';
-import { formatKg, lastSetsFor } from '../stats';
+import { lastSetsFor } from '../stats';
+import { draftValue, entryUnit, formatW, fromUnit, roundIn, toUnit } from '../units';
 import { exerciseName, shortDate } from '../format';
 import {
   draftFromSets,
@@ -45,6 +46,8 @@ interface DraftExercise {
   exerciseId: string;
   sets: DraftSet[];
   rir?: number;
+  /** Bu kartta ağırlıkların yazıldığı birim. */
+  unit: Unit;
 }
 
 const RIR_OPTIONS = [0, 1, 2, 3, 4];
@@ -67,20 +70,27 @@ export default function LogWorkout({
   const existing = data.workouts.find((w) => w.date === date);
   const [workoutId] = useState(() => existing?.id ?? newId());
   const [note, setNote] = useState(existing?.note ?? '');
-  const [items, setItems] = useState<DraftExercise[]>(() => {
-    const base = (existing?.exercises ?? []).map((we) => ({
-      key: newId(),
-      exerciseId: we.exerciseId,
-      sets: draftFromSets(we.sets),
-      rir: we.rir,
-    }));
-    const extra = (startTemplate?.exercises ?? []).map((te) => ({
-      key: newId(),
-      exerciseId: te.exerciseId,
-      sets: draftFromTemplateExercise(te, data.workouts, date, data.exercises.find((e) => e.id === te.exerciseId)),
-    }));
-    return [...base, ...extra];
-  });
+  const prefUnit: Unit = data.unit ?? 'kg';
+  const unitOf = (exerciseId: string) => entryUnit(data.workouts, exerciseId, date, prefUnit);
+  const fromTemplate = (t: Template): DraftExercise[] =>
+    t.exercises.map((te) => {
+      const unit = unitOf(te.exerciseId);
+      return {
+        key: newId(),
+        exerciseId: te.exerciseId,
+        unit,
+        sets: draftFromTemplateExercise(te, data.workouts, date, data.exercises.find((e) => e.id === te.exerciseId), unit),
+      };
+    });
+  const fromSaved = (w?: Workout): DraftExercise[] =>
+    (w?.exercises ?? []).map((we) => {
+      const unit = we.unit ?? 'kg';
+      return { key: newId(), exerciseId: we.exerciseId, sets: draftFromSets(we.sets, unit), rir: we.rir, unit };
+    });
+  const [items, setItems] = useState<DraftExercise[]>(() => [
+    ...fromSaved(existing),
+    ...(startTemplate ? fromTemplate(startTemplate) : []),
+  ]);
   const [templateName, setTemplateName] = useState<string | null>(null);
   const [savedTemplate, setSavedTemplate] = useState('');
   const focusRef = useRef<string | null>(null);
@@ -90,7 +100,7 @@ export default function LogWorkout({
   const upsertRef = useRef(upsertWorkout);
   upsertRef.current = upsertWorkout;
   const savedSig = (w?: Workout) =>
-    w ? JSON.stringify({ e: w.exercises.map((x) => ({ i: x.exerciseId, s: x.sets, r: x.rir ?? null })), n: w.note ?? '' }) : '';
+    w ? JSON.stringify({ e: w.exercises.map((x) => ({ i: x.exerciseId, s: x.sets, r: x.rir ?? null, u: x.unit ?? 'kg' })), n: w.note ?? '' }) : '';
   const existingSig = savedSig(existing);
   const dirty = useRef(false);
   useEffect(() => {
@@ -100,8 +110,9 @@ export default function LogWorkout({
       note: note.trim() || undefined,
       exercises: items.map((it) => ({
         exerciseId: it.exerciseId,
-        sets: it.sets.map((s) => ({ kg: toNum(s.kg), reps: Math.round(toNum(s.reps)) })),
+        sets: it.sets.map((s) => ({ kg: fromUnit(toNum(s.kg), it.unit), reps: Math.round(toNum(s.reps)) })),
         ...(it.rir !== undefined ? { rir: it.rir } : {}),
+        ...(it.unit === 'lb' ? { unit: 'lb' as const } : {}),
       })),
     };
     const sig = w.exercises.length ? savedSig(w) : '';
@@ -117,14 +128,7 @@ export default function LogWorkout({
     if (existingSig === existingSigRef.current) return;
     existingSigRef.current = existingSig;
     if (dirty.current) return;
-    setItems(
-      (existing?.exercises ?? []).map((we) => ({
-        key: newId(),
-        exerciseId: we.exerciseId,
-        sets: draftFromSets(we.sets),
-        rir: we.rir,
-      })),
-    );
+    setItems(fromSaved(existing));
     setNote(existing?.note ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingSig]);
@@ -144,7 +148,8 @@ export default function LogWorkout({
     const m = new Map<string, Recommendation>();
     for (const it of items) {
       const ex = exById.get(it.exerciseId);
-      if (ex && !m.has(ex.id)) m.set(ex.id, recommend(ex, data.workouts, date));
+      const k = `${it.exerciseId}:${it.unit}`;
+      if (ex && !m.has(k)) m.set(k, recommend(ex, data.workouts, date, it.unit));
     }
     return m;
   }, [items, exById, data.workouts, date]);
@@ -152,45 +157,51 @@ export default function LogWorkout({
   const addItem = (exerciseId: string) => {
     // Geçmiş varsa önerilen setlerle, yoksa tek boş setle başla.
     const ex = exById.get(exerciseId);
-    const rec = ex ? recommend(ex, data.workouts, date) : undefined;
+    const unit = unitOf(exerciseId);
+    const rec = ex ? recommend(ex, data.workouts, date, unit) : undefined;
     const last = lastSetsFor(data.workouts, exerciseId, date);
     const first = last?.sets[0];
     const sets = rec?.sets.length
-      ? draftFromSets(rec.sets)
-      : [{ kg: first ? String(first.kg) : '', reps: first ? String(first.reps) : '' }];
+      ? draftFromSets(rec.sets, unit)
+      : [{ kg: first ? draftValue(first.kg, unit) : '', reps: first ? String(first.reps) : '' }];
     const key = newId();
     focusRef.current = `${key}-0-kg`;
-    setItems((xs) => [...xs, { key, exerciseId, sets }]);
+    setItems((xs) => [...xs, { key, exerciseId, sets, unit }]);
   };
 
   const applyRec = (key: string, rec: Recommendation) =>
-    setItems((xs) => xs.map((it) => (it.key === key ? { ...it, sets: draftFromSets(rec.sets) } : it)));
+    setItems((xs) => xs.map((it) => (it.key === key ? { ...it, sets: draftFromSets(rec.sets, it.unit) } : it)));
 
   const setRir = (key: string, rir: number) =>
     setItems((xs) => xs.map((it) => (it.key === key ? { ...it, rir: it.rir === rir ? undefined : rir } : it)));
 
   const copyWorkout = (w: Workout) =>
-    setItems((xs) => [
-      ...xs,
-      ...w.exercises.map((we) => ({ key: newId(), exerciseId: we.exerciseId, sets: draftFromSets(we.sets) })),
-    ]);
+    setItems((xs) => [...xs, ...fromSaved(w).map((it) => ({ ...it, rir: undefined }))]);
 
-  const applyTemplate = (t: Template) =>
-    setItems((xs) => [
-      ...xs,
-      ...t.exercises.map((te) => ({
-        key: newId(),
-        exerciseId: te.exerciseId,
-        sets: draftFromTemplateExercise(te, data.workouts, date, exById.get(te.exerciseId)),
-      })),
-    ]);
+  const applyTemplate = (t: Template) => setItems((xs) => [...xs, ...fromTemplate(t)]);
+
+  /** Kartın birimini değiştirir; yazılı ağırlıklar yeni birime çevrilir. */
+  const setUnit = (key: string, unit: Unit) =>
+    setItems((xs) =>
+      xs.map((it) =>
+        it.key === key && it.unit !== unit
+          ? {
+              ...it,
+              unit,
+              sets: it.sets.map((s) =>
+                s.kg.trim() === '' ? s : { ...s, kg: draftValue(fromUnit(toNum(s.kg), it.unit), unit) },
+              ),
+            }
+          : it,
+      ),
+    );
 
   const saveAsTemplate = () => {
     const name = templateName?.trim();
     if (!name) return;
     const exercises = items.map((it) => ({
       exerciseId: it.exerciseId,
-      sets: it.sets.map((s) => ({ kg: toNum(s.kg), reps: Math.round(toNum(s.reps)) })),
+      sets: it.sets.map((s) => ({ kg: fromUnit(toNum(s.kg), it.unit), reps: Math.round(toNum(s.reps)) })),
     }));
     saveTemplate(templateFromWorkout(name, newId(), exercises));
     setTemplateName(null);
@@ -240,7 +251,7 @@ export default function LogWorkout({
 
   const totalSets = items.reduce((n, it) => n + it.sets.length, 0);
   const totalVolume = items.reduce(
-    (n, it) => n + it.sets.reduce((m, s) => m + toNum(s.kg) * Math.round(toNum(s.reps)), 0),
+    (n, it) => n + it.sets.reduce((m, s) => m + fromUnit(toNum(s.kg), it.unit) * Math.round(toNum(s.reps)), 0),
     0,
   );
 
@@ -312,8 +323,8 @@ export default function LogWorkout({
             <span className="unit">set</span>
           </div>
           <div>
-            <span className="num">{formatKg(totalVolume)}</span>
-            <span className="unit">kg</span>
+            <span className="num">{formatW(totalVolume, prefUnit)}</span>
+            <span className="unit">{prefUnit}</span>
           </div>
           <span className="saved" title="Değişiklikler otomatik kaydedilir">
             <IconCheck width={16} height={16} /> Kaydedildi
@@ -387,6 +398,13 @@ export default function LogWorkout({
                 {ex?.muscleGroup && <span className="lift-group">{ex.muscleGroup}</span>}
               </div>
               <div className="lift-tools">
+                <div className="unit-seg" role="group" aria-label="Ağırlık birimi">
+                  {(['kg', 'lb'] as Unit[]).map((u) => (
+                    <button key={u} className={it.unit === u ? 'on' : ''} aria-pressed={it.unit === u} onClick={() => setUnit(it.key, u)}>
+                      {u}
+                    </button>
+                  ))}
+                </div>
                 <button className="ghost-icon sm" onClick={() => move(it.key, -1)} disabled={idx === 0} aria-label="Yukarı taşı">
                   <IconUp width={18} height={18} />
                 </button>
@@ -404,12 +422,15 @@ export default function LogWorkout({
               </div>
             </header>
             {(() => {
-              const rec = recs.get(it.exerciseId);
+              const rec = recs.get(`${it.exerciseId}:${it.unit}`);
               if (!rec) return null;
               const matches =
                 rec.sets.length > 0 &&
                 rec.sets.length === it.sets.length &&
-                rec.sets.every((r, j) => toNum(it.sets[j].kg) === r.kg && Math.round(toNum(it.sets[j].reps)) === r.reps);
+                rec.sets.every(
+                  (r, j) =>
+                    toNum(it.sets[j].kg) === roundIn(toUnit(r.kg, it.unit), it.unit) && Math.round(toNum(it.sets[j].reps)) === r.reps,
+                );
               return (
                 <div className={`rec rec-${rec.kind}`}>
                   <div className="rec-head">
@@ -430,9 +451,10 @@ export default function LogWorkout({
                 Son seferde, {shortDate(last.date)}:{' '}
                 {last.sets.map((s, j) => (
                   <span key={j} className="last-set">
-                    {formatKg(s.kg)}×{s.reps}
+                    {formatW(s.kg, it.unit)}×{s.reps}
                   </span>
-                ))}
+                ))}{' '}
+                <span className="muted small">{it.unit}</span>
               </p>
             )}
             <ol className="set-list">
@@ -447,9 +469,9 @@ export default function LogWorkout({
                       data-focus={`${it.key}-${i}-kg`}
                       onFocus={(e) => e.target.select()}
                       onChange={(e) => updateSet(it.key, i, 'kg', e.target.value)}
-                      aria-label={`Set ${i + 1} kg`}
+                      aria-label={`Set ${i + 1} ağırlık (${it.unit})`}
                     />
-                    <span className="set-unit">kg</span>
+                    <span className="set-unit">{it.unit}</span>
                   </label>
                   <span className="set-x" aria-hidden>
                     ×

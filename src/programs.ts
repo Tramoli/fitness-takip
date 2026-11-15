@@ -1,4 +1,5 @@
-import type { Exercise, SetEntry, Template, TemplateExercise, Workout, WorkoutExercise } from './types';
+import type { Exercise, SetEntry, Template, TemplateExercise, Unit, Workout, WorkoutExercise } from './types';
+import { draftValue } from './units';
 import { recommend } from './overload';
 import { lastSetsFor, sortByDateAsc } from './stats';
 
@@ -10,9 +11,9 @@ export interface DraftSet {
 
 const str = (n: number | undefined) => (n === undefined ? '' : String(n));
 
-/** Kayıtlı bir hareketin setlerini kopyalar. */
-export function draftFromSets(sets: SetEntry[]): DraftSet[] {
-  return sets.map((s) => ({ kg: str(s.kg), reps: str(s.reps) }));
+/** Kayıtlı (kg) setleri, verilen birimde kutu değerlerine çevirir. */
+export function draftFromSets(sets: SetEntry[], unit: Unit = 'kg'): DraftSet[] {
+  return sets.map((s) => ({ kg: draftValue(s.kg, unit), reps: str(s.reps) }));
 }
 
 /**
@@ -25,18 +26,19 @@ export function draftFromTemplateExercise(
   workouts: Workout[],
   date: string,
   ex?: Exercise,
+  unit: Unit = 'kg',
 ): DraftSet[] {
-  const rec = ex ? recommend(ex, workouts, date) : undefined;
+  const rec = ex ? recommend(ex, workouts, date, unit) : undefined;
   const base = rec?.sets.length ? rec.sets : lastSetsFor(workouts, te.exerciseId, date)?.sets ?? [];
   return Array.from({ length: Math.max(1, te.sets) }, (_, i) => {
     const prev = base[i] ?? base[base.length - 1];
-    if (prev) return { kg: str(prev.kg), reps: str(rec?.sets.length ? prev.reps : te.reps ?? prev.reps) };
+    if (prev) return { kg: draftValue(prev.kg, unit), reps: str(rec?.sets.length ? prev.reps : te.reps ?? prev.reps) };
     return { kg: '', reps: str(te.reps) };
   });
 }
 
 /** Öneri setlerini taslağa çevirir. */
-export const draftFromRecommendation = (sets: SetEntry[]): DraftSet[] => draftFromSets(sets);
+export const draftFromRecommendation = (sets: SetEntry[], unit: Unit = 'kg'): DraftSet[] => draftFromSets(sets, unit);
 
 /** Seçilen günden önceki en son antrenmanlar (en yeni önce). */
 export function recentWorkouts(workouts: Workout[], beforeDate: string, limit = 3): Workout[] {

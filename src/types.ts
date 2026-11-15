@@ -18,6 +18,8 @@ export interface WorkoutExercise {
   note?: string;
   /** Son sette yedekte kalan tekrar (RIR). 4 = 4 ve üzeri. */
   rir?: number;
+  /** Ağırlığın girildiği birim (değerler her zaman kg saklanır). Yoksa kg. */
+  unit?: Unit;
 }
 
 export interface Workout {
@@ -48,6 +50,10 @@ export interface AppData {
   templates: Template[];
   /** Antrenman deneyimi: haftalık hacim ve deload hedeflerini belirler. */
   level?: Level;
+  /** Ağırlıkların gösterildiği ve yeni hareketlerde varsayılan birim. Yoksa kg. */
+  unit?: Unit;
 }
+
+export type Unit = 'kg' | 'lb';
 
 export type Level = 'beginner' | 'intermediate' | 'advanced';

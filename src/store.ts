@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AppData, Exercise, Level, Template, Workout } from './types';
+import type { AppData, Exercise, Level, Template, Unit, Workout } from './types';
 import { DEFAULT_EXERCISES, mergeDefaultExercises } from './exercises';
 import { buildExercises, connectCloud, type Cloud, type SyncStatus } from './cloud';
 import { db } from './firebase';
@@ -30,6 +30,7 @@ export function parseData(raw: unknown): AppData {
     workouts: d.workouts,
     templates: Array.isArray(d.templates) ? d.templates : [],
     level: d.level,
+    unit: d.unit === 'lb' ? 'lb' : d.unit === 'kg' ? 'kg' : undefined,
   };
 }
 
@@ -94,7 +95,7 @@ export function useAppData(uid: string | null) {
       (c) =>
         setStore((s) =>
           s.key === key
-            ? { key, data: { version: 1, exercises: c.exercises.length ? c.exercises : buildExercises([]), workouts: c.workouts, templates: c.templates, level: c.level } }
+            ? { key, data: { version: 1, exercises: c.exercises.length ? c.exercises : buildExercises([]), workouts: c.workouts, templates: c.templates, level: c.level, unit: c.unit } }
             : s,
         ),
       setStatus,
@@ -188,9 +189,18 @@ export function useAppData(uid: string | null) {
     [setData],
   );
 
+  const setUnit = useCallback(
+    (unit: Unit) => {
+      setData((d) => ({ ...d, unit }));
+      cloudRef.current?.setUnit(unit);
+    },
+    [setData],
+  );
+
   return {
     data,
     status,
+    setUnit,
     upsertWorkout,
     deleteWorkout,
     addExercise,

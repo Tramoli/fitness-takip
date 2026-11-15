@@ -12,7 +12,8 @@ import {
   YAxis,
 } from 'recharts';
 import { format } from 'date-fns';
-import type { AppData, Exercise, Level } from '../types';
+import type { AppData, Exercise, Level, Unit } from '../types';
+import { entryUnit, formatW, toUnit } from '../units';
 import { addDays, parseISO } from 'date-fns';
 import { LEVELS, exerciseScore, programScore, recommend, repRange } from '../overload';
 import BodyMap from '../BodyMap';
@@ -33,6 +34,7 @@ interface Props {
   data: AppData;
   updateExercise: (id: string, patch: Partial<Exercise>) => void;
   setLevel: (l: Level) => void;
+  setUnit: (u: Unit) => void;
 }
 
 const FAR_FUTURE = '9999-12-31';
@@ -82,7 +84,9 @@ function RangeEdit({ range, onSave }: { range: [number, number]; onSave: (lo: nu
 
 const scoreWord = (n: number) => (n >= 85 ? 'Çok iyi' : n >= 70 ? 'İyi' : n >= 50 ? 'Orta' : 'Geliştirilmeli');
 
-export default function Progress({ data, updateExercise, setLevel }: Props) {
+export default function Progress({ data, updateExercise, setLevel, setUnit }: Props) {
+  const unit: Unit = data.unit ?? 'kg';
+  const w = (kg: number) => formatW(kg, unit);
   const today = format(new Date(), 'yyyy-MM-dd');
   const level: Level = data.level ?? 'intermediate';
   const weekFrom = format(addDays(parseISO(today), -6), 'yyyy-MM-dd');
@@ -112,12 +116,18 @@ export default function Progress({ data, updateExercise, setLevel }: Props) {
   const ex = data.exercises.find((e) => e.id === exId);
   const exGroup = ex?.muscleGroup;
   const exScore = useMemo(() => (ex ? exerciseScore(ex, data.workouts, today) : null), [ex, data.workouts, today]);
-  const next = useMemo(() => (ex ? recommend(ex, data.workouts, FAR_FUTURE) : null), [ex, data.workouts]);
+  const next = useMemo(
+    () => (ex ? recommend(ex, data.workouts, FAR_FUTURE, entryUnit(data.workouts, ex.id, FAR_FUTURE, unit)) : null),
+    [ex, data.workouts, unit],
+  );
   const range = ex ? repRange(ex) : ([8, 12] as [number, number]);
 
   const points = useMemo(() => (exId ? exerciseProgress(data.workouts, exId) : []), [data.workouts, exId]);
   const pr = useMemo(() => (exId ? personalRecords(data.workouts, exId) : undefined), [data.workouts, exId]);
-  const weeks = useMemo(() => weeklyVolume(data.workouts, 12), [data.workouts]);
+  const weeks = useMemo(
+    () => weeklyVolume(data.workouts, 12).map((x) => ({ ...x, volume: Math.round(toUnit(x.volume, unit)) })),
+    [data.workouts, unit],
+  );
   const thisWeek = weeks[weeks.length - 1];
   const lastWeek = weeks[weeks.length - 2];
 
@@ -133,11 +143,28 @@ export default function Progress({ data, updateExercise, setLevel }: Props) {
     );
   }
 
-  const chartData = points.map((p) => ({ ...p, label: shortDate(p.date) }));
+  const chartData = points.map((p) => ({
+    ...p,
+    maxKg: Math.round(toUnit(p.maxKg, unit) * 10) / 10,
+    est1RM: Math.round(toUnit(p.est1RM, unit) * 10) / 10,
+    label: shortDate(p.date),
+  }));
+  const unitToggle = (
+    <div className="unit-seg" role="group" aria-label="Ağırlık birimi">
+      {(['kg', 'lb'] as Unit[]).map((u) => (
+        <button key={u} className={unit === u ? 'on' : ''} aria-pressed={unit === u} onClick={() => setUnit(u)}>
+          {u}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <section className="page">
-      <h1 className="page-title">İlerleme</h1>
+      <div className="cal-head">
+        <h1 className="page-title">İlerleme</h1>
+        {unitToggle}
+      </div>
 
       <div className="panel score-panel">
         <div className="score-head">
@@ -237,10 +264,10 @@ export default function Progress({ data, updateExercise, setLevel }: Props) {
         {pr?.heaviest && pr.best1RM && pr.bestVolume && (
           <>
             <div className="hero-stat">
-              <span className="hero-num">{formatKg(pr.best1RM.value)}</span>
-              <span className="hero-unit">kg</span>
+              <span className="hero-num">{w(pr.best1RM.value)}</span>
+              <span className="hero-unit">{unit}</span>
               <p className="hero-caption">
-                Tahmini tek tekrar maksimumun ({formatKg(pr.best1RM.kg)} kg × {pr.best1RM.reps},{' '}
+                Tahmini tek tekrar maksimumun ({w(pr.best1RM.kg)} {unit} × {pr.best1RM.reps},{' '}
                 {midDate(pr.best1RM.date)})
               </p>
             </div>
@@ -248,13 +275,15 @@ export default function Progress({ data, updateExercise, setLevel }: Props) {
               <div>
                 <dt>En ağır set</dt>
                 <dd>
-                  {formatKg(pr.heaviest.kg)} kg × {pr.heaviest.reps}
+                  {w(pr.heaviest.kg)} {unit} × {pr.heaviest.reps}
                 </dd>
                 <dd className="rec-date">{midDate(pr.heaviest.date)}</dd>
               </div>
               <div>
                 <dt>En yüksek hacim</dt>
-                <dd>{formatKg(pr.bestVolume.value)} kg</dd>
+                <dd>
+                  {w(pr.bestVolume.value)} {unit}
+                </dd>
                 <dd className="rec-date">{midDate(pr.bestVolume.date)}</dd>
               </div>
             </dl>
@@ -316,13 +345,13 @@ export default function Progress({ data, updateExercise, setLevel }: Props) {
                 <YAxis tick={axisStyle} tickLine={false} axisLine={false} domain={['auto', 'auto']} width={44} />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  formatter={(v: number, name: string) => [`${formatKg(v)} kg`, name]}
+                  formatter={(v: number, name: string) => [`${formatKg(v)} ${unit}`, name]}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="maxKg"
-                  name="Max kg"
+                  name={`Max ${unit}`}
                   stroke="var(--plate)"
                   strokeWidth={2.5}
                   dot={{ r: 3 }}
@@ -347,12 +376,16 @@ export default function Progress({ data, updateExercise, setLevel }: Props) {
         <dl className="records">
           <div>
             <dt>Bu hafta</dt>
-            <dd>{formatKg(thisWeek.volume)} kg</dd>
+            <dd>
+              {formatKg(thisWeek.volume)} {unit}
+            </dd>
             <dd className="rec-date">{thisWeek.workouts} antrenman</dd>
           </div>
           <div>
             <dt>Geçen hafta</dt>
-            <dd>{formatKg(lastWeek.volume)} kg</dd>
+            <dd>
+              {formatKg(lastWeek.volume)} {unit}
+            </dd>
             <dd className="rec-date">{lastWeek.workouts} antrenman</dd>
           </div>
         </dl>
@@ -372,7 +405,7 @@ export default function Progress({ data, updateExercise, setLevel }: Props) {
                 contentStyle={tooltipStyle}
                 cursor={{ fill: 'var(--hover)' }}
                 labelFormatter={(l) => `${l} haftası`}
-                formatter={(v: number, _n, item) => [`${formatKg(v)} kg · ${item.payload.workouts} antrenman`, 'Hacim']}
+                formatter={(v: number, _n, item) => [`${formatKg(v)} ${unit} · ${item.payload.workouts} antrenman`, 'Hacim']}
               />
               <Bar isAnimationActive={false} dataKey="volume" fill="var(--ink)" radius={[3, 3, 0, 0]} />
             </BarChart>

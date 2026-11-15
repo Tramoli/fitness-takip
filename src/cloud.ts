@@ -21,7 +21,7 @@ import {
   type DocumentData,
   type Firestore,
 } from 'firebase/firestore';
-import type { AppData, Exercise, Level, Template, Workout } from './types';
+import type { AppData, Exercise, Level, Template, Unit, Workout } from './types';
 import { DEFAULT_EXERCISES } from './exercises';
 
 // ---------- Saf yardımcılar (test edilir) ----------
@@ -63,6 +63,7 @@ export interface CloudState {
   templates: Template[];
   exercises: Exercise[];
   level?: Level;
+  unit?: Unit;
 }
 
 export interface Cloud {
@@ -72,6 +73,7 @@ export interface Cloud {
   saveTemplate: (t: Template) => void;
   deleteTemplate: (id: string) => void;
   setLevel: (l: Level) => void;
+  setUnit: (u: Unit) => void;
   replaceAll: (d: AppData) => Promise<void>;
   flush: () => void;
   stop: () => void;
@@ -149,7 +151,8 @@ export function connectCloud(
           for (const [c, id, data] of writes.slice(i, i + 400)) batch.set(ref(c, id), data);
           await batch.commit();
         }
-        if (localToMigrate.level) await setDoc(ref('meta', 'settings'), { level: localToMigrate.level }, { merge: true });
+        const settings = { level: localToMigrate.level, unit: localToMigrate.unit };
+        if (settings.level || settings.unit) await setDoc(ref('meta', 'settings'), clean(settings), { merge: true });
         onMigrated();
       } catch (err) {
         console.error('Yerel kayıtlar buluta taşınamadı', err);
@@ -162,6 +165,7 @@ export function connectCloud(
       listen('exercises', (d) => (state.exercises = buildExercises(d as Exercise[]))),
       onSnapshot(ref('meta', 'settings'), (s) => {
         state.level = (s.data()?.level as Level | undefined) ?? undefined;
+        state.unit = (s.data()?.unit as Unit | undefined) ?? undefined;
         emit();
       }),
     );
@@ -217,6 +221,9 @@ export function connectCloud(
     setLevel(level) {
       setDoc(ref('meta', 'settings'), { level }, { merge: true }).catch(console.error);
     },
+    setUnit(unit) {
+      setDoc(ref('meta', 'settings'), { unit }, { merge: true }).catch(console.error);
+    },
     async replaceAll(d) {
       flush();
       const [ws, ts] = await Promise.all([getDocs(col('workouts')), getDocs(col('templates'))]);
@@ -236,7 +243,7 @@ export function connectCloud(
         ops.slice(i, i + 400).forEach((f) => f(batch));
         await batch.commit();
       }
-      if (d.level) await setDoc(ref('meta', 'settings'), { level: d.level }, { merge: true });
+      if (d.level || d.unit) await setDoc(ref('meta', 'settings'), clean({ level: d.level, unit: d.unit }), { merge: true });
     },
     flush,
     stop() {

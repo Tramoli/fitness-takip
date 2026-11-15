@@ -132,7 +132,7 @@ export default function App() {
           <History data={store.data} onEdit={openDate} onDelete={store.deleteWorkout} onReplaceAll={store.replaceAll} />
         )}
         {tab === 'progress' && (
-          <Progress data={store.data} updateExercise={store.updateExercise} setLevel={store.setLevel} />
+          <Progress data={store.data} updateExercise={store.updateExercise} setLevel={store.setLevel} setUnit={store.setUnit} />
         )}
         {tab === 'calendar' && <CalendarView data={store.data} selected={date} onPick={openDate} />}
         </ErrorBoundary>

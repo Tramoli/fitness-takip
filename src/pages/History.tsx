@@ -4,8 +4,9 @@ import { tr } from 'date-fns/locale';
 import type { AppData } from '../types';
 import { exportData, parseData } from '../store';
 import { groupColor } from '../exercises';
-import { exerciseVolume, formatKg, sortByDateAsc, workoutVolume } from '../stats';
+import { exerciseVolume, sortByDateAsc, workoutVolume } from '../stats';
 import { exerciseName, longDate } from '../format';
+import { formatW } from '../units';
 import { IconEdit, IconTrash } from '../icons';
 
 interface Props {
@@ -17,6 +18,7 @@ interface Props {
 
 export default function History({ data, onEdit, onDelete, onReplaceAll }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const unit = data.unit ?? 'kg';
   const workouts = sortByDateAsc(data.workouts).reverse();
   const groupOf = (id: string) => data.exercises.find((e) => e.id === id)?.muscleGroup;
 
@@ -59,7 +61,7 @@ export default function History({ data, onEdit, onDelete, onReplaceAll }: Props)
                 <header className="entry-head">
                   <p className="entry-stats">
                     <span>
-                      <b>{formatKg(workoutVolume(w))}</b> kg
+                      <b>{formatW(workoutVolume(w), unit)}</b> {unit}
                     </span>
                     <span>
                       <b>{sets}</b> set
@@ -83,12 +85,12 @@ export default function History({ data, onEdit, onDelete, onReplaceAll }: Props)
                     <li key={i} style={{ ['--plate' as string]: groupColor(groupOf(we.exerciseId)) }}>
                       <div className="entry-lift-head">
                         <span className="ex-name">{exerciseName(data, we.exerciseId)}</span>
-                        <span className="muted small">{formatKg(exerciseVolume(we))} kg</span>
+                        <span className="muted small">{formatW(exerciseVolume(we), unit)} {unit}</span>
                       </div>
                       <span className="ex-sets">
                         {we.sets.map((s, j) => (
                           <span className="chip" key={j}>
-                            {formatKg(s.kg)}×{s.reps}
+                            {formatW(s.kg, unit)}×{s.reps}
                           </span>
                         ))}
                       </span>

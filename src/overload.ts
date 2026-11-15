@@ -12,7 +12,8 @@
  *  5. 4–6 haftalık bloktan sonra setlerin ~%50 azaltıldığı 1 haftalık deload.
  */
 import { addDays, differenceInCalendarDays, format, parseISO, startOfISOWeek } from 'date-fns';
-import type { Exercise, Level, SetEntry, Workout } from './types';
+import type { Exercise, Level, SetEntry, Unit, Workout } from './types';
+import { fromUnit, roundIn, toUnit } from './units';
 import { estimate1RM, round1, sortByDateAsc } from './stats';
 
 // ---------- Seviye hedefleri (kaynak tablosu) ----------
@@ -121,24 +122,38 @@ export interface Recommendation {
   /** Neden bu öneri. */
   reason: string;
   range: [number, number];
+  /** Başlıktaki birim. */
+  unit: Unit;
 }
 
 const fmt = (n: number) => n.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
 
-function title(sets: SetEntry[]) {
+/** Setler seçilen birimdeki değerlerle gelir. */
+function title(sets: SetEntry[], unit: Unit) {
   if (!sets.length) return '';
   const kgs = new Set(sets.map((s) => s.kg));
   if (kgs.size === 1) {
     const kg = sets[0].kg;
-    return `${kg ? `${fmt(kg)} kg` : 'Vücut ağırlığı'} × ${sets.map((s) => s.reps).join(', ')}`;
+    return `${kg ? `${fmt(kg)} ${unit}` : 'Vücut ağırlığı'} × ${sets.map((s) => s.reps).join(', ')}`;
   }
-  return sets.map((s) => `${fmt(s.kg)}×${s.reps}`).join(', ');
+  return `${sets.map((s) => `${fmt(s.kg)}×${s.reps}`).join(', ')} ${unit}`;
 }
 
-export function recommend(ex: Exercise, workouts: Workout[], date: string): Recommendation {
+/** Seansı seçilen birime çevirir (lb'de hesaplar 5 lb adımlarla yapılır). */
+function sessionIn(s: Session, unit: Unit): Session {
+  if (unit === 'kg') return s;
+  const c = (e: SetEntry) => ({ kg: roundIn(toUnit(e.kg, unit), unit), reps: e.reps });
+  return { ...s, sets: s.sets.map(c), working: s.working.map(c), topKg: roundIn(toUnit(s.topKg, unit), unit), best1RM: toUnit(s.best1RM, unit) };
+}
+
+/**
+ * Sonraki antrenman önerisi. unit: hareketin girildiği birim; adımlar ve başlık
+ * bu birimde, dönen setler her zaman kg'dir.
+ */
+export function recommend(ex: Exercise, workouts: Workout[], date: string, unit: Unit = 'kg'): Recommendation {
   const range = repRange(ex);
   const [lo, hi] = range;
-  const hist = sessionsFor(workouts, ex.id, date);
+  const hist = sessionsFor(workouts, ex.id, date).map((s) => sessionIn(s, unit));
   const compound = isCompound(ex);
 
   if (!hist.length) {
@@ -146,6 +161,7 @@ export function recommend(ex: Exercise, workouts: Workout[], date: string): Reco
       kind: 'start',
       sets: [],
       title: 'İlk seferin',
+      unit,
       reason: `${lo}–${hi} tekrar yapabileceğin, son sette ${compound ? '1–3' : '0–2'} tekrar yedekte kalacak bir ağırlıkla başla.`,
       range,
     };
@@ -155,7 +171,7 @@ export function recommend(ex: Exercise, workouts: Workout[], date: string): Reco
   const prev = hist[hist.length - 2];
   const setCount = Math.max(1, Math.min(last.sets.length, Math.max(last.working.length, 2)));
   const kg = last.topKg;
-  const step = weightStep(ex);
+  const step = unit === 'lb' ? 5 : weightStep(ex);
   const working = last.working;
   const make = (k: number, reps: number[]): SetEntry[] => reps.map((r) => ({ kg: k, reps: r }));
   const pad = (reps: number[]) => {
@@ -165,8 +181,9 @@ export function recommend(ex: Exercise, workouts: Workout[], date: string): Reco
   };
   const done = (k: RecKind, sets: SetEntry[], reason: string): Recommendation => ({
     kind: k,
-    sets,
-    title: title(sets),
+    sets: sets.map((x) => ({ kg: fromUnit(x.kg, unit), reps: x.reps })),
+    title: title(sets, unit),
+    unit,
     reason,
     range,
   });
@@ -202,7 +219,7 @@ export function recommend(ex: Exercise, workouts: Workout[], date: string): Reco
       return done(
         'increase',
         make(step, Array(setCount).fill(lo)),
-        `Tüm setlerde ${hi} tekrara ulaştın. Ek ağırlık (≈${fmt(step)} kg) takıp ${lo} tekrardan yeniden başla.`,
+        `Tüm setlerde ${hi} tekrara ulaştın. Ek ağırlık (≈${fmt(step)} ${unit}) takıp ${lo} tekrardan yeniden başla.`,
       );
     }
     const pct = increasePct(ex) * (easy ? 2 : 1);

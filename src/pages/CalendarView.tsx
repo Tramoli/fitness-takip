@@ -12,7 +12,8 @@ import {
 } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import type { AppData } from '../types';
-import { formatKg, workoutVolume } from '../stats';
+import { workoutVolume } from '../stats';
+import { formatW } from '../units';
 import { exerciseName } from '../format';
 import { groupColor } from '../exercises';
 import { IconChevronLeft, IconChevronRight } from '../icons';
@@ -105,7 +106,9 @@ export default function CalendarView({ data, selected, onPick }: Props) {
           </div>
           <div>
             <dt>Bu ay hacim</dt>
-            <dd>{formatKg(monthVolume)} kg</dd>
+            <dd>
+              {formatW(monthVolume, data.unit ?? 'kg')} {data.unit ?? 'kg'}
+            </dd>
           </div>
         </dl>
         <ul className="legend">

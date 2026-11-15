@@ -139,3 +139,24 @@ describe('consecutiveLoadedWeeks', () => {
     expect(consecutiveLoadedWeeks(ws.slice(0, 6), '2026-10-18')).toBe(6);
   });
 });
+
+describe('recommend lb', () => {
+  const ex = { id: 'x-machine', name: 'Chest Press Machine', muscleGroup: 'Göğüs' };
+  const lb = (n: number) => n * 0.45359237;
+  const w = (date: string, kg: number, reps: number[]): Workout => ({
+    id: date,
+    date,
+    exercises: [{ exerciseId: ex.id, unit: 'lb', sets: reps.map((r) => ({ kg, reps: r })) }],
+  });
+  it('lb ile girilen harekette 5 lb artırır ve başlığı lb yazar', () => {
+    const rec = recommend(ex, [w('2026-11-01', lb(100), [12, 12, 12])], '2026-11-05', 'lb');
+    expect(rec.kind).toBe('increase');
+    expect(rec.title).toBe('105 lb × 8, 8, 8');
+    expect(rec.sets[0].kg).toBeCloseTo(lb(105), 6);
+  });
+  it('aynı geçmiş kg ile 2,5 kg adımla önerilir', () => {
+    const rec = recommend(ex, [w('2026-11-01', 50, [12, 12, 12])], '2026-11-05', 'kg');
+    expect(rec.title).toBe('52,5 kg × 8, 8, 8');
+  });
+});
+
