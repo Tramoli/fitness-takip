@@ -90,6 +90,10 @@ export const ACTIVATION: Record<string, Profile> = {
   'low-cable-fly': T({ chest_upper: 1, chest: 0.5, delt_front: 0.5 }),
   'high-cable-fly': T({ chest_upper: 0.5, chest: 1, delt_front: 0.25 }),
   'push-up': T({ chest_upper: 0.62, chest: 0.75, delt_front: 0.62, triceps: 0.62, abs: 0.37 }),
+  'incline-push-up': T({ chest_upper: 0.37, chest: 0.62, delt_front: 0.5, triceps: 0.5, abs: 0.25 }),
+  'chair-squat': T({ quads: 0.75, glutes: 0.5, adductors: 0.25 }),
+  'dead-bug': T({ abs: 0.75, obliques: 0.5 }),
+  'bird-dog': T({ lower_back: 0.75, glutes: 0.5, abs: 0.25 }),
   'weighted-push-up': T({ chest_upper: 0.62, chest: 0.87, delt_front: 0.62, triceps: 0.62, abs: 0.37 }),
   'chest-dips': T({ chest_upper: 0.37, chest: 1, delt_front: 0.62, triceps: 0.75 }),
   'svend-press': T({ chest_upper: 0.75, chest: 0.75, delt_front: 0.5 }),
@@ -312,13 +316,54 @@ export function workoutsLoad(workouts: Workout[], exercises: Exercise[], from: s
 
 export type Zone = 'none' | 'low' | 'mid' | 'good' | 'over';
 
-/** Tek seans (program): 6–8 set tavanı. */
+/** Tek seans (program): ideal 6–8, 10'un üstü verimsiz. */
 export function sessionZone(sets: number): Zone {
   if (sets <= 0.05) return 'none';
   if (sets < 2) return 'low';
   if (sets < 4) return 'mid';
-  if (sets <= 8) return 'good';
+  if (sets <= 10) return 'good';
   return 'over';
+}
+
+/**
+ * Kas başına haftalık hacim işaretleri (haftalık set): MEV en az etkili,
+ * MAV en verimli aralık, MRV toparlanılabilecek üst sınır (alt değerleri).
+ * Kaynak: kullanıcının "Hipertrofi ve Direnç Antrenmanı Rehberi" not defteri.
+ * MEV'i verilmeyen kaslarda (0) eşik MAV'ın yarısıdır.
+ */
+export const LANDMARKS: Partial<Record<MuscleId, { mev: number; mav: [number, number]; mrv: number }>> = {
+  chest_upper: { mev: 4, mav: [6, 16], mrv: 16 },
+  chest: { mev: 4, mav: [6, 16], mrv: 16 },
+  lats: { mev: 0, mav: [14, 22], mrv: 25 },
+  traps: { mev: 0, mav: [14, 22], mrv: 25 },
+  delt_front: { mev: 0, mav: [6, 8], mrv: 12 },
+  delt_side: { mev: 6, mav: [8, 22], mrv: 22 },
+  delt_rear: { mev: 0, mav: [4, 12], mrv: 12 },
+  biceps: { mev: 8, mav: [14, 20], mrv: 20 },
+  triceps: { mev: 0, mav: [10, 14], mrv: 18 },
+  quads: { mev: 4, mav: [6, 14], mrv: 14 },
+  hamstrings: { mev: 2, mav: [2, 8], mrv: 8 },
+  glutes: { mev: 0, mav: [4, 12], mrv: 16 },
+  calves: { mev: 0, mav: [12, 16], mrv: 20 },
+  abs: { mev: 0, mav: [16, 20], mrv: 25 },
+  obliques: { mev: 0, mav: [16, 20], mrv: 25 },
+};
+
+/** Haftalık bölge: kasın kendi hacim işaretlerine göre; verisi yoksa seviye hedefine göre. */
+export function muscleWeeklyZone(sets: number, m: MuscleId, levelTarget: [number, number]): Zone {
+  const L = LANDMARKS[m];
+  if (!L) return weeklyZone(sets, levelTarget);
+  if (sets <= 0.05) return 'none';
+  if (sets < (L.mev > 0 ? L.mev : L.mav[0] / 2)) return 'low';
+  if (sets < L.mav[0]) return 'mid';
+  if (sets <= L.mrv) return 'good';
+  return 'over';
+}
+
+export function muscleTargetText(m: MuscleId, levelTarget: [number, number]): string {
+  const L = LANDMARKS[m];
+  if (!L) return `hedef ${levelTarget[0]}–${levelTarget[1]}`;
+  return `verimli ${L.mav[0]}–${L.mav[1]}, üst sınır ${L.mrv}`;
 }
 
 /** Haftalık: seviyenin haftalık set hedefine göre. */

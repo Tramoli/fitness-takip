@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACTIVATION, effectiveSets, sessionZone, weeklyZone, workoutsLoad } from './muscles';
+import { ACTIVATION, effectiveSets, muscleWeeklyZone, sessionZone, weeklyZone, workoutsLoad } from './muscles';
 import { DEFAULT_EXERCISES } from './exercises';
 import type { Exercise } from './types';
 
@@ -44,10 +44,20 @@ describe('effectiveSets', () => {
 });
 
 describe('bölgeler', () => {
-  it('seans: 6–8 set tavanı', () => {
-    expect([0, 1, 3, 6, 9].map(sessionZone)).toEqual(['none', 'low', 'mid', 'good', 'over']);
+  it('seans: 10 set tavanı', () => {
+    expect([0, 1, 3, 9, 11].map(sessionZone)).toEqual(['none', 'low', 'mid', 'good', 'over']);
   });
   it('haftalık: hedefe göre', () => {
     expect([0, 3, 8, 12, 17].map((n) => weeklyZone(n, [10, 16]))).toEqual(['none', 'low', 'mid', 'good', 'over']);
   });
 });
+
+describe('kas hacim işaretleri', () => {
+  it('göğüs: MEV 4, MAV 6–16, MRV 16', () => {
+    expect([0, 3, 5, 12, 18].map((n) => muscleWeeklyZone(n, 'chest', [10, 20]))).toEqual(['none', 'low', 'mid', 'good', 'over']);
+  });
+  it('verisi olmayan kas seviye hedefini kullanır', () => {
+    expect(muscleWeeklyZone(12, 'forearms', [10, 20])).toBe('good');
+  });
+});
+

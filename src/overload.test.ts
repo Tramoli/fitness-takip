@@ -14,9 +14,10 @@ const w = (date: string, exerciseId: string, sets: [number, number][], rir?: num
 });
 
 describe('repRange', () => {
-  it('temel hareket 6–10, izolasyon 8–12, özel aralık önceliklidir', () => {
+  it('temel hareket 6–10, izolasyon 10–15, özel aralık önceliklidir', () => {
     expect(repRange(bench)).toEqual([6, 10]);
-    expect(repRange(curl)).toEqual([8, 12]);
+    expect(repRange(curl)).toEqual([10, 15]);
+    expect(repRange({ id: 'lateral-raise', name: 'Lateral Raise' })).toEqual([12, 20]);
     expect(repRange({ ...bench, repMin: 5, repMax: 8 })).toEqual([5, 8]);
   });
 });
@@ -44,8 +45,8 @@ describe('recommend (çift ilerleme)', () => {
   });
 
   it('dambılda 2 kg adım', () => {
-    const r = recommend(curl, [w('2026-11-10', 'db-curl', [[14, 12], [14, 12]])], '2026-11-15');
-    expect(r.sets[0]).toEqual({ kg: 16, reps: 8 });
+    const r = recommend(curl, [w('2026-11-10', 'db-curl', [[14, 15], [14, 15]])], '2026-11-15');
+    expect(r.sets[0]).toEqual({ kg: 16, reps: 10 });
   });
 
   it('temel harekette 0 RIR: ağırlık sabit kalır', () => {
@@ -117,13 +118,13 @@ describe('exerciseScore', () => {
 describe('programScore', () => {
   it('seans tavanını aşan grubu ve düşük hacmi raporlar', () => {
     const ws: Workout[] = [
-      w('2026-11-03', 'bench-press', Array(10).fill([80, 8])),
-      w('2026-11-10', 'bench-press', Array(10).fill([80, 8])),
+      w('2026-11-03', 'bench-press', Array(12).fill([80, 8])),
+      w('2026-11-10', 'bench-press', Array(12).fill([80, 8])),
     ];
     const p = programScore([bench], ws, '2026-11-15')!;
     expect(p.parts.find((x) => x.key === 'cap')!.value).toBe(0);
-    expect(p.insights.some((i) => i.text.includes('8 seti aşan'))).toBe(true);
-    expect(p.weekly[0]).toMatchObject({ group: 'Göğüs', sets: 5 });
+    expect(p.insights.some((i) => i.text.includes('10 seti aşan'))).toBe(true);
+    expect(p.weekly[0]).toMatchObject({ group: 'Göğüs', sets: 6 });
   });
 });
 
@@ -149,14 +150,25 @@ describe('recommend lb', () => {
     exercises: [{ exerciseId: ex.id, unit: 'lb', sets: reps.map((r) => ({ kg, reps: r })) }],
   });
   it('lb ile girilen harekette 5 lb artırır ve başlığı lb yazar', () => {
-    const rec = recommend(ex, [w('2026-11-01', lb(100), [12, 12, 12])], '2026-11-05', 'lb');
+    const rec = recommend(ex, [w('2026-11-01', lb(100), [15, 15, 15])], '2026-11-05', 'lb');
     expect(rec.kind).toBe('increase');
-    expect(rec.title).toBe('105 lb × 8, 8, 8');
+    expect(rec.title).toBe('105 lb × 10, 10, 10');
     expect(rec.sets[0].kg).toBeCloseTo(lb(105), 6);
   });
   it('aynı geçmiş kg ile 2,5 kg adımla önerilir', () => {
-    const rec = recommend(ex, [w('2026-11-01', 50, [12, 12, 12])], '2026-11-05', 'kg');
-    expect(rec.title).toBe('52,5 kg × 8, 8, 8');
+    const rec = recommend(ex, [w('2026-11-01', 50, [15, 15, 15])], '2026-11-05', 'kg');
+    expect(rec.title).toBe('52,5 kg × 10, 10, 10');
+  });
+});
+
+describe('2-for-2 kuralı', () => {
+  it('son set iki antrenman üst üste hedefin 2 üstündeyse ağırlık artar', () => {
+    const rec = recommend(bench, [
+      w('2026-11-05', 'bench-press', [[80, 9], [80, 12]]),
+      w('2026-11-08', 'bench-press', [[80, 9], [80, 12]]),
+    ], '2026-11-12');
+    expect(rec.kind).toBe('increase');
+    expect(rec.sets[0].kg).toBe(82.5);
   });
 });
 

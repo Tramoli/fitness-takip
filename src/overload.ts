@@ -6,10 +6,15 @@
  * Protokolü" bölümünden alınmıştır:
  *  1. Çift ilerleme: tüm setler aralığın üst sınırına ulaşınca ağırlık
  *     %2,5–5 artırılır, tekrar alt sınıra çekilir; ikisi aynı anda artmaz.
- *  2. Temel hareketlerde setler 1–3 RIR'da biter; 0 RIR yalnızca izolasyonda.
- *  3. Seans başına kas grubu için 6–8 set tavanı; haftalık hedef seviyeye göre.
- *  4. Hareket açıklığı sabit tutulur (uygulama ölçemez, hatırlatılır).
- *  5. 4–6 haftalık bloktan sonra setlerin ~%50 azaltıldığı 1 haftalık deload.
+ *     2-for-2: son set iki antrenman üst üste hedefi 2+ tekrar aşarsa da artar.
+ *  2. Temel hareketlerde setler 1–3 RIR'da biter; 0–1 RIR yalnızca izolasyonda.
+ *  3. Seans başına kas grubu için ideal 6–8, en fazla ~10 set; haftalık hedef
+ *     seviyeye göre (başlangıç 4–10, orta 10–20, ileri 12–25).
+ *  4. Tekrar aralıkları: temel 6–10, izolasyon 10–15, yan/arka omuz açışları 12–20.
+ *  5. Plato: 3 antrenman ilerleme yoksa ağırlık ~%10 düşürülüp yeniden tırmanılır.
+ *  6. 4–9 haftalık bloktan sonra setlerin %30–50 azaltıldığı 1 haftalık deload
+ *     (ağırlık ve RIR korunur).
+ * Kaynak: kullanıcının "Gelişim Modelleri ve İlkeler" not defteri.
  */
 import { addDays, differenceInCalendarDays, format, parseISO, startOfISOWeek } from 'date-fns';
 import type { Exercise, Level, SetEntry, Unit, Workout } from './types';
@@ -22,13 +27,13 @@ export const LEVELS: Record<
   Level,
   { label: string; weeklySets: [number, number]; rir: [number, number]; deloadEvery: [number, number] }
 > = {
-  beginner: { label: 'Başlangıç', weeklySets: [8, 10], rir: [2, 3], deloadEvery: [6, 8] },
-  intermediate: { label: 'Orta', weeklySets: [10, 16], rir: [1, 2], deloadEvery: [5, 6] },
-  advanced: { label: 'İleri', weeklySets: [16, 20], rir: [1, 2], deloadEvery: [4, 5] },
+  beginner: { label: 'Başlangıç', weeklySets: [4, 10], rir: [2, 3], deloadEvery: [6, 9] },
+  intermediate: { label: 'Orta', weeklySets: [10, 20], rir: [1, 3], deloadEvery: [5, 6] },
+  advanced: { label: 'İleri', weeklySets: [12, 25], rir: [1, 2], deloadEvery: [4, 5] },
 };
 
-/** Seans başına aynı kas grubu için set tavanı (6–8). */
-export const SESSION_SET_CAP = 8;
+/** Seans başına aynı kas grubu için set tavanı: ideal 6–8, 10'un üstü verimsiz. */
+export const SESSION_SET_CAP = 10;
 
 // ---------- Hareket sınıflandırması ----------
 
@@ -54,9 +59,15 @@ export const isCompound = (ex: Pick<Exercise, 'id'>) => COMPOUND.has(ex.id);
 
 const LOWER_BODY = new Set(['Bacak (Ön)', 'Bacak (Arka) & Kalça', 'Baldır']);
 
-/** Varsayılan tekrar aralığı: temel hareketler 6–10, diğerleri 8–12. */
+/** Yan ve arka omuz açışları: kaynakta 12–20 tekrar önerilir. */
+const HIGH_REP = new Set([
+  'lateral-raise', 'cable-lateral-raise', 'machine-lateral-raise', 'rear-delt-fly', 'cable-rear-delt-fly',
+  'reverse-pec-deck', 'y-raise', 'face-pull',
+]);
+
+/** Varsayılan tekrar aralığı: temel 6–10, izolasyon 10–15, omuz açışları 12–20. */
 export function repRange(ex: Exercise): [number, number] {
-  const def: [number, number] = isCompound(ex) ? [6, 10] : [8, 12];
+  const def: [number, number] = isCompound(ex) ? [6, 10] : HIGH_REP.has(ex.id) ? [12, 20] : [10, 15];
   const lo = ex.repMin ?? def[0];
   const hi = Math.max(lo, ex.repMax ?? def[1]);
   return [lo, hi];
@@ -213,8 +224,12 @@ export function recommend(ex: Exercise, workouts: Workout[], date: string, unit:
 
   const easy = last.rir !== undefined && last.rir >= 4;
 
+  // 2-for-2: son çalışma seti iki antrenman üst üste aynı ağırlıkta hedefin 2+ üstünde.
+  const lastRep = (h: Session) => h.working[h.working.length - 1]?.reps ?? 0;
+  const twoForTwo = !!prev && prev.topKg === kg && lastRep(last) >= hi + 2 && lastRep(prev) >= hi + 2;
+
   // Kural 1: tüm çalışma setleri üst sınırda → ağırlığı artır, tekrarı alt sınıra çek.
-  if (working.length && working.every((s) => s.reps >= hi)) {
+  if (working.length && (working.every((s) => s.reps >= hi) || twoForTwo)) {
     if (kg === 0) {
       return done(
         'increase',
@@ -227,7 +242,7 @@ export function recommend(ex: Exercise, workouts: Workout[], date: string, unit:
     return done(
       'increase',
       make(newKg, Array(setCount).fill(lo)),
-      `Tüm setlerde aralığın üst sınırına (${hi}) ulaştın. Ağırlığı %${fmt(round1(((newKg - kg) / kg) * 100))} artır, tekrarı ${lo}'a çek (çift ilerleme).`,
+      `${twoForTwo && !working.every((s) => s.reps >= hi) ? `İki antrenmandır son sette ${hi + 2}+ tekrar yaptın (2-for-2 kuralı).` : `Tüm setlerde aralığın üst sınırına (${hi}) ulaştın.`} Ağırlığı %${fmt(round1(((newKg - kg) / kg) * 100))} artır, tekrarı ${lo}'a çek (çift ilerleme).`,
     );
   }
 
@@ -420,7 +435,7 @@ export function programScore(
   if (weeksSinceDeload >= L.deloadEvery[0])
     insights.push({
       tone: 'warn',
-      text: `${weeksSinceDeload} haftadır ara vermeden yükleniyorsun. Önümüzdeki hafta set sayısını ~%50 azaltarak deload yap.`,
+      text: `${weeksSinceDeload} haftadır ara vermeden yükleniyorsun. Önümüzdeki hafta set sayısını %30–50 azaltarak deload yap; ağırlıkları ve RIR'ı koru.`,
     });
 
   // Kural 2: temel hareketlerde 0 RIR.

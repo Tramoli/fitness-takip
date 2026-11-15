@@ -61,7 +61,7 @@ function Figure({
 }: {
   shapes: Shape[];
   load: MuscleLoad;
-  zoneOf: (sets: number) => Zone;
+  zoneOf: (sets: number, m: MuscleId) => Zone;
   selected: MuscleId | null;
   onSelect: (m: MuscleId) => void;
   back?: boolean;
@@ -70,7 +70,7 @@ function Figure({
   const mirror = 'translate(200,0) scale(-1,1)';
   const muscle = (s: Shape, k: string, transform?: string) => {
     const sets = load[s.m] ?? 0;
-    const zone = zoneOf(sets);
+    const zone = zoneOf(sets, s.m);
     return (
       <path
         key={k}
@@ -112,21 +112,23 @@ function Figure({
 
 export interface BodyMapProps {
   load: MuscleLoad;
-  zoneOf: (sets: number) => Zone;
+  zoneOf: (sets: number, m: MuscleId) => Zone;
   legend: { zone: Zone; text: string }[];
+  /** Seçilen kas için hedef açıklaması (ör. haftalık MEV–MRV). */
+  targetOf?: (m: MuscleId) => string | undefined;
   /** Kas listesindeki çubuğun ölçeği (ör. haftalık hedefin üst sınırı). */
   scaleMax: number;
   unit?: string;
   compact?: boolean;
 }
 
-export default function BodyMap({ load, zoneOf, legend, scaleMax, unit = 'etkili set', compact }: BodyMapProps) {
+export default function BodyMap({ load, zoneOf, legend, scaleMax, unit = 'etkili set', compact, targetOf }: BodyMapProps) {
   const [selected, setSelected] = useState<MuscleId | null>(null);
   const toggle = (m: MuscleId) => setSelected((s) => (s === m ? null : m));
   const rows = MUSCLES.map((m) => ({ ...m, sets: load[m.id] ?? 0 }))
     .filter((m) => m.sets > 0)
     .sort((a, b) => b.sets - a.sets);
-  const sel = selected ? { name: muscleName(selected), sets: load[selected] ?? 0 } : null;
+  const sel = selected ? { name: muscleName(selected), sets: load[selected] ?? 0, target: targetOf?.(selected) } : null;
 
   return (
     <div className={`bodymap${compact ? ' compact' : ''}`}>
@@ -137,7 +139,8 @@ export default function BodyMap({ load, zoneOf, legend, scaleMax, unit = 'etkili
 
       {sel && (
         <p className="bm-selected">
-          <b>{sel.name}</b>: {sel.sets.toLocaleString("tr-TR")} {unit}
+          <b>{sel.name}</b>: {sel.sets.toLocaleString('tr-TR')} {unit}
+          {sel.target && <span className="muted"> · {sel.target}</span>}
         </p>
       )}
 
@@ -157,7 +160,7 @@ export default function BodyMap({ load, zoneOf, legend, scaleMax, unit = 'etkili
               <span className="bm-name">{r.name}</span>
               <span className="bm-bar">
                 <span
-                  className={`mz-${zoneOf(r.sets)}`}
+                  className={`mz-${zoneOf(r.sets, r.id)}`}
                   style={{ width: `${Math.min(100, (r.sets / scaleMax) * 100)}%` }}
                 />
               </span>

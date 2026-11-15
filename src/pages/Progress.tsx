@@ -17,7 +17,7 @@ import { entryUnit, formatW, toUnit } from '../units';
 import { addDays, parseISO } from 'date-fns';
 import { LEVELS, exerciseScore, programScore, recommend, repRange } from '../overload';
 import BodyMap from '../BodyMap';
-import { weeklyZone, workoutsLoad } from '../muscles';
+import { muscleTargetText, muscleWeeklyZone, workoutsLoad } from '../muscles';
 import { exerciseProgress, formatKg, personalRecords, weeklyVolume } from '../stats';
 import { midDate, shortDate } from '../format';
 import { groupColor } from '../exercises';
@@ -237,18 +237,20 @@ export default function Progress({ data, updateExercise, setLevel, setUnit }: Pr
         <h2 className="chart-title">Son 7 gün kas aktivasyonu</h2>
         <BodyMap
           load={weekLoad}
-          zoneOf={(n) => weeklyZone(n, target)}
-          scaleMax={target[1] + 4}
+          zoneOf={(n, m) => muscleWeeklyZone(n, m, target)}
+          targetOf={(m) => muscleTargetText(m, target)}
+          scaleMax={25}
           legend={[
-            { zone: 'low', text: `${target[0] / 2} setten az` },
-            { zone: 'mid', text: `${target[0] / 2}–${target[0]}` },
-            { zone: 'good', text: `${target[0]}–${target[1]} (hedef)` },
-            { zone: 'over', text: `${target[1]} üstü` },
+            { zone: 'low', text: 'Etkili dozun altında (MEV)' },
+            { zone: 'mid', text: 'Etkili, verimli aralığa yaklaşıyor' },
+            { zone: 'good', text: 'Verimli aralık (MAV)' },
+            { zone: 'over', text: 'Toparlanma sınırı üstü (MRV)' },
           ]}
         />
         <p className="bm-note">
-          Etkili set = set × o hareketin kası çalıştırma oranı ({LEVELS[level].label.toLocaleLowerCase('tr')} seviye için
-          haftalık hedef {target[0]}–{target[1]}). Bir kasa dokunarak değerini görebilirsin.
+          Etkili set = set × o hareketin kası çalıştırma oranı; yardımcı kaslar yarım set sayılır. Her kas kendi haftalık
+          hacim işaretlerine göre renklenir. {LEVELS[level].label} seviye için kas başına genel hedef {target[0]}–
+          {target[1]} set. Bir kasa dokunarak değerini ve hedefini görebilirsin.
         </p>
       </div>
 

@@ -10,8 +10,8 @@ import { emgCoverage, effectiveSets, sessionZone, templateLoad, type MuscleLoad 
 const SESSION_LEGEND = [
   { zone: 'low' as const, text: '2 setten az' },
   { zone: 'mid' as const, text: '2–4' },
-  { zone: 'good' as const, text: '4–8 (etkili)' },
-  { zone: 'over' as const, text: '8 üstü (fazla)' },
+  { zone: 'good' as const, text: '4–10 (etkili, ideal 6–8)' },
+  { zone: 'over' as const, text: '10 üstü (verimsiz)' },
 ];
 
 /** Programın kas aktivasyonu: harita + ölçüm kapsamı notu. */
@@ -22,8 +22,8 @@ function ProgramMap({ load, ids, compact }: { load: MuscleLoad; ids: string[]; c
       <BodyMap load={load} zoneOf={sessionZone} legend={SESSION_LEGEND} scaleMax={10} compact={compact} />
       {!compact && (
         <p className="bm-note">
-          Renk, bir seansta o kasa düşen etkili set sayısını gösterir (set × kas aktivasyonu). Seans başına 6–8 set
-          tavanı aşılırsa kas taranır. {cov.total > 0 && `${cov.total} hareketin ${cov.emg} tanesi sEMG ölçümlerine dayanıyor, diğerleri benzer hareketlerden tahmin.`}
+          Renk, bir seansta o kasa düşen etkili set sayısını gösterir (set × kas aktivasyonu). İdeali seans başına 6–8
+          set; 10–11 setin üstü ek gelişim getirmez. {cov.total > 0 && `${cov.total} hareketin ${cov.emg} tanesi sEMG ölçümlerine dayanıyor, diğerleri benzer hareketlerden tahmin.`}
         </p>
       )}
     </div>
