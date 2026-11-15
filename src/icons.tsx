@@ -118,3 +118,19 @@ export const IconPlay = (p: P) => (
     <path d="M8 5.5v13l11-6.5z" />
   </svg>
 );
+export const IconCloud = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M7 18.5h10.5a4 4 0 00.6-7.96A6 6 0 006.4 9.6 4.5 4.5 0 007 18.5z" />
+  </svg>
+);
+export const IconCloudOff = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M7 18.5h10.5M20.5 15.5a4 4 0 00-2.4-4.96A6 6 0 009.2 6.3M6.4 9.6A4.5 4.5 0 007 18.5M3 3l18 18" />
+  </svg>
+);
+export const IconUser = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="8.5" r="3.8" />
+    <path d="M4.5 20c1.4-3.6 4.2-5.4 7.5-5.4s6.1 1.8 7.5 5.4" />
+  </svg>
+);

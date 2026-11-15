@@ -86,13 +86,15 @@ export default function LogWorkout({
   const focusRef = useRef<string | null>(null);
 
   // Her değişiklik otomatik kaydedilir. Program uygulanarak açıldıysa ilk hâli de kaydedilir.
-  const firstRun = useRef(!startTemplate);
+  // Kayıtlı halle aynıysa (ör. açılış ya da buluttan gelen güncelleme) hiçbir şey yazılmaz.
+  const upsertRef = useRef(upsertWorkout);
+  upsertRef.current = upsertWorkout;
+  const savedSig = (w?: Workout) =>
+    w ? JSON.stringify({ e: w.exercises.map((x) => ({ i: x.exerciseId, s: x.sets, r: x.rir ?? null })), n: w.note ?? '' }) : '';
+  const existingSig = savedSig(existing);
+  const dirty = useRef(false);
   useEffect(() => {
-    if (firstRun.current) {
-      firstRun.current = false;
-      return;
-    }
-    upsertWorkout({
+    const w: Workout = {
       id: workoutId,
       date,
       note: note.trim() || undefined,
@@ -101,8 +103,31 @@ export default function LogWorkout({
         sets: it.sets.map((s) => ({ kg: toNum(s.kg), reps: Math.round(toNum(s.reps)) })),
         ...(it.rir !== undefined ? { rir: it.rir } : {}),
       })),
-    });
-  }, [items, note, date, workoutId, upsertWorkout]);
+    };
+    const sig = w.exercises.length ? savedSig(w) : '';
+    if (sig === existingSigRef.current) return;
+    dirty.current = true;
+    upsertRef.current(w);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, note, date, workoutId]);
+
+  // Başka bir cihazdan (buluttan) gelen değişiklik: bu güne henüz dokunmadıysan ekranı güncelle.
+  const existingSigRef = useRef(existingSig);
+  useEffect(() => {
+    if (existingSig === existingSigRef.current) return;
+    existingSigRef.current = existingSig;
+    if (dirty.current) return;
+    setItems(
+      (existing?.exercises ?? []).map((we) => ({
+        key: newId(),
+        exerciseId: we.exerciseId,
+        sets: draftFromSets(we.sets),
+        rir: we.rir,
+      })),
+    );
+    setNote(existing?.note ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingSig]);
 
   useEffect(() => {
     if (!focusRef.current) return;

@@ -1736,3 +1736,108 @@ input[type='search']::-webkit-search-cancel-button {
 .stepper .ghost-icon:disabled {
   opacity: 0.25;
 }
+
+/* ---------- Hesap ve senkronizasyon ---------- */
+
+.appbar-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+.sync-btn {
+  position: relative;
+}
+.sync-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--surface);
+  background: var(--success);
+}
+.sync-pending .sync-badge {
+  background: var(--plate-yellow);
+}
+.sync-offline .sync-badge {
+  background: var(--muted);
+}
+.account-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.account-email {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 1.4rem;
+  word-break: break-all;
+}
+.sync-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+}
+.sync-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--success);
+}
+.sync-line.sync-pending .sync-dot {
+  background: var(--plate-yellow);
+}
+.sync-line.sync-offline .sync-dot,
+.sync-line.sync-local .sync-dot {
+  background: var(--muted);
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.google-btn {
+  margin-top: 12px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+}
+.seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 4px;
+}
+.seg button {
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  height: 36px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.seg button.on {
+  background: var(--surface);
+  color: var(--text);
+}
+.form-error {
+  margin-top: 10px;
+  font-size: 0.88rem;
+  color: var(--danger);
+}
+.form-ok {
+  margin-top: 10px;
+  font-size: 0.88rem;
+  color: var(--success);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.link-btn.small {
+  font-size: 0.85rem;
+  margin-top: 8px;
+}

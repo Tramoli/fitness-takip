@@ -12,7 +12,7 @@ interface Props {
   data: AppData;
   onEdit: (date: string) => void;
   onDelete: (id: string) => void;
-  onReplaceAll: (d: AppData) => void;
+  onReplaceAll: (d: AppData) => void | Promise<void>;
 }
 
 export default function History({ data, onEdit, onDelete, onReplaceAll }: Props) {
@@ -29,7 +29,7 @@ export default function History({ data, onEdit, onDelete, onReplaceAll }: Props)
         )
       )
         return;
-      onReplaceAll(parsed);
+      await onReplaceAll(parsed);
     } catch (e) {
       alert(`Dosya okunamadı: ${(e as Error).message}`);
     }

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { useAppData } from './store';
+import { useAuth } from './auth';
+import Account from './pages/Account';
 import { useTheme } from './theme';
 import type { Template } from './types';
 import LogWorkout from './pages/LogWorkout';
@@ -9,9 +11,20 @@ import Progress from './pages/Progress';
 import CalendarView from './pages/CalendarView';
 import Programs from './pages/Programs';
 import ErrorBoundary from './ErrorBoundary';
-import { IconCalendar, IconHistory, IconLog, IconMoon, IconPrograms, IconProgress, IconSun } from './icons';
+import {
+  IconCalendar,
+  IconCloud,
+  IconCloudOff,
+  IconHistory,
+  IconLog,
+  IconMoon,
+  IconPrograms,
+  IconProgress,
+  IconSun,
+  IconUser,
+} from './icons';
 
-type Tab = 'log' | 'programs' | 'history' | 'progress' | 'calendar';
+type Tab = 'log' | 'programs' | 'history' | 'progress' | 'calendar' | 'account';
 
 const TABS: { id: Tab; label: string; Icon: typeof IconLog }[] = [
   { id: 'log', label: 'Kaydet', Icon: IconLog },
@@ -24,7 +37,8 @@ const TABS: { id: Tab; label: string; Icon: typeof IconLog }[] = [
 const todayStr = () => format(new Date(), 'yyyy-MM-dd');
 
 export default function App() {
-  const store = useAppData();
+  const user = useAuth();
+  const store = useAppData(user?.uid ?? null);
   const { theme, toggle } = useTheme();
   const [tab, setTab] = useState<Tab>('log');
   const [date, setDate] = useState(todayStr);
@@ -49,6 +63,30 @@ export default function App() {
         <span className="brand">
           <span className="plate-dot" aria-hidden /> Fitness Takip
         </span>
+        <span className="appbar-actions">
+        <button
+          className={`ghost-icon theme-toggle sync-btn sync-${store.status}`}
+          onClick={() => setTab('account')}
+          aria-label={
+            store.status === 'local'
+              ? 'Hesap: giriş yapılmadı'
+              : store.status === 'offline'
+                ? 'Hesap: çevrimdışı'
+                : store.status === 'pending'
+                  ? 'Hesap: eşitleniyor'
+                  : 'Hesap: eşitlendi'
+          }
+          title={user?.email ?? 'Giriş yap'}
+        >
+          {store.status === 'local' ? (
+            <IconUser width={20} height={20} />
+          ) : store.status === 'offline' ? (
+            <IconCloudOff width={20} height={20} />
+          ) : (
+            <IconCloud width={20} height={20} />
+          )}
+          {store.status !== 'local' && <span className="sync-badge" aria-hidden />}
+        </button>
         <button
           className="ghost-icon theme-toggle"
           onClick={toggle}
@@ -57,9 +95,14 @@ export default function App() {
         >
           {theme === 'dark' ? <IconSun width={20} height={20} /> : <IconMoon width={20} height={20} />}
         </button>
+        </span>
       </header>
       <main className="content">
+        {user === undefined ? (
+          <p className="muted">Yükleniyor…</p>
+        ) : (
         <ErrorBoundary key={tab} onReset={() => setTab('log')}>
+        {tab === 'account' && <Account user={user} status={store.status} onClose={() => setTab('log')} />}
         {tab === 'log' && (
           <LogWorkout
             key={`${date}-${start?.nonce ?? 0}`}
@@ -93,6 +136,7 @@ export default function App() {
         )}
         {tab === 'calendar' && <CalendarView data={store.data} selected={date} onPick={openDate} />}
         </ErrorBoundary>
+        )}
       </main>
       <nav className="tabbar">
         {TABS.map((t) => (
