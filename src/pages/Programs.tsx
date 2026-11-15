@@ -118,6 +118,77 @@ export default function Programs({ data, saveTemplate, deleteTemplate, addExerci
   );
 }
 
+/** − [sayı] + : hem dokunarak hem yazarak değiştirilebilen sayı alanı. */
+function Stepper({
+  value,
+  min,
+  max,
+  unit,
+  label,
+  allowEmpty,
+  emptyStart = min,
+  onChange,
+}: {
+  value?: number;
+  min: number;
+  max: number;
+  unit: string;
+  label: string;
+  allowEmpty?: boolean;
+  emptyStart?: number;
+  onChange: (v: number | undefined) => void;
+}) {
+  const [text, setText] = useState(value === undefined ? '' : String(value));
+  // Dışarıdan (± ile) değişince kutuyu güncelle.
+  const [last, setLast] = useState(value);
+  if (value !== last) {
+    setLast(value);
+    setText(value === undefined ? '' : String(value));
+  }
+  const clamp = (n: number) => Math.min(max, Math.max(min, n));
+  const step = (d: number) => onChange(clamp(value === undefined ? emptyStart : value + d));
+
+  return (
+    <div className="stepper" role="group" aria-label={label}>
+      <button
+        className="ghost-icon sm"
+        onClick={() => step(-1)}
+        disabled={value !== undefined && value <= min}
+        aria-label={`${label}: azalt`}
+      >
+        <IconMinus width={18} height={18} />
+      </button>
+      <label className="stepper-field">
+        <input
+          inputMode="numeric"
+          value={text}
+          placeholder="–"
+          onFocus={(e) => e.target.select()}
+          onChange={(e) => {
+            const t = e.target.value.replace(/\D/g, '').slice(0, 2);
+            setText(t);
+            const n = parseInt(t, 10);
+            if (n >= min && n <= max) onChange(n);
+            else if (!t && allowEmpty) onChange(undefined);
+          }}
+          onBlur={() => setText(value === undefined ? '' : String(value))}
+          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+          aria-label={label}
+        />
+        <span className="set-unit-inline">{unit}</span>
+      </label>
+      <button
+        className="ghost-icon sm"
+        onClick={() => step(1)}
+        disabled={value !== undefined && value >= max}
+        aria-label={`${label}: artır`}
+      >
+        <IconPlus width={18} height={18} />
+      </button>
+    </div>
+  );
+}
+
 function Editor({
   initial,
   data,
@@ -196,38 +267,27 @@ function Editor({
                   </div>
                 </header>
                 <div className="target-row">
-                  <div className="stepper" aria-label="Set sayısı">
-                    <button
-                      className="ghost-icon sm"
-                      onClick={() => update(i, { sets: Math.max(1, r.sets - 1) })}
-                      aria-label="Seti azalt"
-                    >
-                      <IconMinus width={18} height={18} />
-                    </button>
-                    <span className="stepper-val">
-                      {r.sets} <span className="set-unit-inline">set</span>
-                    </span>
-                    <button className="ghost-icon sm" onClick={() => update(i, { sets: Math.min(20, r.sets + 1) })} aria-label="Seti artır">
-                      <IconPlus width={18} height={18} />
-                    </button>
-                  </div>
+                  <Stepper
+                    value={r.sets}
+                    min={1}
+                    max={20}
+                    unit="set"
+                    label="Set sayısı"
+                    onChange={(v) => update(i, { sets: v ?? 1 })}
+                  />
                   <span className="set-x" aria-hidden>
                     ×
                   </span>
-                  <label className="set-field">
-                    <input
-                      inputMode="numeric"
-                      placeholder="–"
-                      value={r.reps ?? ''}
-                      onFocus={(e) => e.target.select()}
-                      onChange={(e) => {
-                        const n = parseInt(e.target.value, 10);
-                        update(i, { reps: Number.isFinite(n) && n > 0 ? n : undefined });
-                      }}
-                      aria-label="Hedef tekrar"
-                    />
-                    <span className="set-unit">tekrar</span>
-                  </label>
+                  <Stepper
+                    value={r.reps}
+                    min={1}
+                    max={50}
+                    unit="tekrar"
+                    label="Hedef tekrar"
+                    allowEmpty
+                    emptyStart={10}
+                    onChange={(v) => update(i, { reps: v })}
+                  />
                 </div>
               </li>
             );
