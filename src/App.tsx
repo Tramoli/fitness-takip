@@ -8,6 +8,7 @@ import History from './pages/History';
 import Progress from './pages/Progress';
 import CalendarView from './pages/CalendarView';
 import Programs from './pages/Programs';
+import ErrorBoundary from './ErrorBoundary';
 import { IconCalendar, IconHistory, IconLog, IconMoon, IconPrograms, IconProgress, IconSun } from './icons';
 
 type Tab = 'log' | 'programs' | 'history' | 'progress' | 'calendar';
@@ -58,6 +59,7 @@ export default function App() {
         </button>
       </header>
       <main className="content">
+        <ErrorBoundary key={tab} onReset={() => setTab('log')}>
         {tab === 'log' && (
           <LogWorkout
             key={`${date}-${start?.nonce ?? 0}`}
@@ -88,6 +90,7 @@ export default function App() {
         )}
         {tab === 'progress' && <Progress data={store.data} />}
         {tab === 'calendar' && <CalendarView data={store.data} selected={date} onPick={openDate} />}
+        </ErrorBoundary>
       </main>
       <nav className="tabbar">
         {TABS.map((t) => (

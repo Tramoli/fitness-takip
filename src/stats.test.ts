@@ -73,3 +73,13 @@ describe('lastSetsFor', () => {
     expect(lastSetsFor(workouts, 'bench', '2026-11-03')).toBeUndefined();
   });
 });
+
+describe('boş setler', () => {
+  it('tekrarı girilmemiş setler rekor ve grafiğe girmez', () => {
+    const empty: Workout[] = [
+      { id: 'x', date: '2026-11-15', exercises: [{ exerciseId: 'leg-press', sets: [{ kg: 0, reps: 0 }] }] },
+    ];
+    expect(personalRecords(empty, 'leg-press')).toEqual({ sessions: 0 });
+    expect(exerciseProgress(empty, 'leg-press')).toEqual([]);
+  });
+});

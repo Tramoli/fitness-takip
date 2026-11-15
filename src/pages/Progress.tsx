@@ -29,7 +29,8 @@ export default function Progress({ data }: { data: AppData }) {
   const used = useMemo(() => {
     const count = new Map<string, number>();
     for (const w of data.workouts)
-      for (const id of new Set(w.exercises.filter((e) => e.sets.length).map((e) => e.exerciseId)))
+      // Yalnızca en az bir seti tamamlanmış (tekrar > 0) hareketler grafiğe girer.
+      for (const id of new Set(w.exercises.filter((e) => e.sets.some((s) => s.reps > 0)).map((e) => e.exerciseId)))
         count.set(id, (count.get(id) ?? 0) + 1);
     return [...count.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -73,28 +74,28 @@ export default function Progress({ data }: { data: AppData }) {
           ))}
         </select>
 
-        {pr && (
+        {pr?.heaviest && pr.best1RM && pr.bestVolume && (
           <>
             <div className="hero-stat">
-              <span className="hero-num">{formatKg(pr.best1RM!.value)}</span>
+              <span className="hero-num">{formatKg(pr.best1RM.value)}</span>
               <span className="hero-unit">kg</span>
               <p className="hero-caption">
-                Tahmini tek tekrar maksimumun ({formatKg(pr.best1RM!.kg)} kg × {pr.best1RM!.reps},{' '}
-                {midDate(pr.best1RM!.date)})
+                Tahmini tek tekrar maksimumun ({formatKg(pr.best1RM.kg)} kg × {pr.best1RM.reps},{' '}
+                {midDate(pr.best1RM.date)})
               </p>
             </div>
             <dl className="records">
               <div>
                 <dt>En ağır set</dt>
                 <dd>
-                  {formatKg(pr.heaviest!.kg)} kg × {pr.heaviest!.reps}
+                  {formatKg(pr.heaviest.kg)} kg × {pr.heaviest.reps}
                 </dd>
-                <dd className="rec-date">{midDate(pr.heaviest!.date)}</dd>
+                <dd className="rec-date">{midDate(pr.heaviest.date)}</dd>
               </div>
               <div>
                 <dt>En yüksek hacim</dt>
-                <dd>{formatKg(pr.bestVolume!.value)} kg</dd>
-                <dd className="rec-date">{midDate(pr.bestVolume!.date)}</dd>
+                <dd>{formatKg(pr.bestVolume.value)} kg</dd>
+                <dd className="rec-date">{midDate(pr.bestVolume.date)}</dd>
               </div>
             </dl>
           </>
