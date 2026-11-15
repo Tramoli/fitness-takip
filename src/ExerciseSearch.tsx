@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Exercise, Workout } from './types';
-import { groupColor } from './exercises';
+import { GROUP_ORDER, groupColor } from './exercises';
 import { IconPlus, IconSearch } from './icons';
 
 /** Türkçe karakterleri sadeleştirir: "Şınav" ve "sinav" eşleşsin. */
@@ -15,19 +15,25 @@ export const normalize = (s: string) =>
     .replace(/ç/g, 'c')
     .replace(/[-()]/g, ' ');
 
+const NEW_EXERCISE = '__new__';
+
 interface Props {
   exercises: Exercise[];
   workouts: Workout[];
   onPick: (exerciseId: string) => void;
-  /** Listede olmayan bir ad için "yeni hareket oluştur" seçildiğinde. */
-  onCreate: (name: string) => void;
+  addExercise: (name: string, muscleGroup?: string) => Exercise;
   placeholder?: string;
-  /** Arama yazılırken gizlenecek ek içerik (ör. açılır liste). */
-  children?: React.ReactNode;
 }
 
-export default function ExerciseSearch({ exercises, workouts, onPick, onCreate, placeholder, children }: Props) {
+/**
+ * Hareket ekleme: yazarak arama ya da kas grubuna göre gruplanmış listeden seçme.
+ * Listede olmayan hareket buradan oluşturulup eklenir.
+ */
+export default function ExerciseSearch({ exercises, workouts, onPick, addExercise, placeholder }: Props) {
   const [query, setQuery] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newGroup, setNewGroup] = useState('');
 
   const matches = useMemo(() => {
     const q = normalize(query.trim());
@@ -52,9 +58,44 @@ export default function ExerciseSearch({ exercises, workouts, onPick, onCreate, 
       .slice(0, 12);
   }, [query, exercises, workouts]);
 
+  const groups = useMemo(() => {
+    const map = new Map<string, Exercise[]>();
+    for (const e of [...exercises].sort((a, b) => a.name.localeCompare(b.name, 'tr'))) {
+      const g = e.muscleGroup || 'Diğer';
+      if (!map.has(g)) map.set(g, []);
+      map.get(g)!.push(e);
+    }
+    const rank = (g: string) => {
+      const i = GROUP_ORDER.indexOf(g);
+      return i === -1 ? GROUP_ORDER.length : i;
+    };
+    return [...map.entries()].sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0], 'tr'));
+  }, [exercises]);
+
+  const knownGroups = useMemo(
+    () => [...new Set(exercises.map((e) => e.muscleGroup).filter(Boolean))] as string[],
+    [exercises],
+  );
+
   const pick = (id: string) => {
     setQuery('');
+    setCreating(false);
     onPick(id);
+  };
+
+  const startCreate = (name = '') => {
+    setNewName(name);
+    setNewGroup('');
+    setQuery('');
+    setCreating(true);
+  };
+
+  const create = () => {
+    const name = newName.trim();
+    if (!name) return;
+    const dup = exercises.find((e) => e.name.toLocaleLowerCase('tr') === name.toLocaleLowerCase('tr'));
+    const ex = dup ?? addExercise(name, newGroup.trim() || undefined);
+    pick(ex.id);
   };
 
   return (
@@ -70,6 +111,7 @@ export default function ExerciseSearch({ exercises, workouts, onPick, onCreate, 
           aria-label="Hareket ara"
         />
       </label>
+
       {query.trim() ? (
         <div className="search-results">
           {matches.map((e) => (
@@ -85,19 +127,66 @@ export default function ExerciseSearch({ exercises, workouts, onPick, onCreate, 
             </button>
           ))}
           {matches.length === 0 && <p className="muted small">Eşleşen hareket yok.</p>}
-          <button
-            className="search-item create"
-            onClick={() => {
-              const name = query.trim();
-              setQuery('');
-              onCreate(name);
-            }}
-          >
+          <button className="search-item create" onClick={() => startCreate(query.trim())}>
             <IconPlus width={18} height={18} /> “{query.trim()}” adında yeni hareket oluştur
           </button>
         </div>
       ) : (
-        children
+        <select
+          value={creating ? NEW_EXERCISE : ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === NEW_EXERCISE) startCreate();
+            else if (v) pick(v);
+          }}
+          aria-label="Listeden hareket seç"
+        >
+          <option value="">…ya da listeden seç</option>
+          {groups.map(([g, exs]) => (
+            <optgroup key={g} label={g}>
+              {exs.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+          <option value={NEW_EXERCISE}>+ Yeni hareket oluştur</option>
+        </select>
+      )}
+
+      {creating && (
+        <div className="new-exercise">
+          <input
+            placeholder="Hareket adı (ör. Hip Thrust)"
+            value={newName}
+            autoFocus
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && create()}
+            aria-label="Yeni hareket adı"
+          />
+          <input
+            placeholder="Kas grubu (isteğe bağlı)"
+            list="muscle-groups"
+            value={newGroup}
+            onChange={(e) => setNewGroup(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && create()}
+            aria-label="Kas grubu"
+          />
+          <datalist id="muscle-groups">
+            {knownGroups.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
+          <div className="row">
+            <button className="btn" onClick={create} disabled={!newName.trim()}>
+              Hareketi ekle
+            </button>
+            <button className="btn ghost" onClick={() => setCreating(false)}>
+              Vazgeç
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

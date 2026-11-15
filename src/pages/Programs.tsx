@@ -239,7 +239,7 @@ function Editor({
         exercises={data.exercises}
         workouts={data.workouts}
         onPick={add}
-        onCreate={(n) => add(addExercise(n).id)}
+        addExercise={addExercise}
         placeholder="Programa hareket ekle…"
       />
 
