@@ -4,7 +4,7 @@ import { newId } from '../store';
 import { groupColor } from '../exercises';
 import ExerciseSearch from '../ExerciseSearch';
 import BodyMap from '../BodyMap';
-import { LIBRARY, planToTemplates, rangeText, templateName, type LibraryPlan } from '../library';
+import { LIBRARY, dayTemplate, planToTemplates, rangeText, templateName, type LibraryPlan } from '../library';
 import { emgCoverage, effectiveSets, sessionZone, templateLoad, type MuscleLoad } from '../muscles';
 
 const SESSION_LEGEND = [
@@ -128,6 +128,7 @@ export default function Programs({ data, saveTemplate, deleteTemplate, addExerci
             plan={plan}
             data={data}
             onCopy={() => planToTemplates(plan, newId).forEach(saveTemplate)}
+            onStart={onStart}
           />
         ))}
       </section>
@@ -135,24 +136,39 @@ export default function Programs({ data, saveTemplate, deleteTemplate, addExerci
   );
 }
 
-function LibraryCard({ plan, data, onCopy }: { plan: LibraryPlan; data: AppData; onCopy: () => void }) {
+function LibraryCard({
+  plan,
+  data,
+  onCopy,
+  onStart,
+}: {
+  plan: LibraryPlan;
+  data: AppData;
+  onCopy: () => void;
+  onStart: (t: Template) => void;
+}) {
+  const [open, setOpen] = useState(false);
   const exById = new Map(data.exercises.map((e) => [e.id, e]));
   const names = new Set(data.templates.map((t) => t.name));
   const copied = plan.days.every((d) => names.has(templateName(plan, d)));
   const [justCopied, setJustCopied] = useState(false);
   return (
-    <article className="program lib-card">
-      <h3 className="program-name">{plan.name}</h3>
-      <p className="lib-meta">
-        <span>{plan.level}</span>
-        <span>{plan.frequency}</span>
-      </p>
-      <p className="muted small">{plan.about}</p>
-      <details className="lib-days">
-        <summary>
-          {plan.days.length > 1 ? `${plan.days.length} günü gör` : 'Hareketleri gör'}
-        </summary>
-        {plan.days.map((day) => (
+    <article className={`program lib-card${open ? ' open' : ''}`}>
+      <button className="lib-head" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <span className="lib-head-text">
+          <span className="program-name">{plan.name}</span>
+          <span className="lib-meta">
+            <span>{plan.level}</span>
+            <span>{plan.frequency}</span>
+          </span>
+        </span>
+        <IconDown className="lib-chevron" width={20} height={20} aria-hidden />
+      </button>
+      {open && <p className="muted small">{plan.about}</p>}
+      {open &&
+        plan.days.map((day) => {
+          const t = dayTemplate(plan, day, `lib-${plan.id}-${day.name}`);
+          return (
           <div key={day.name} className="lib-day">
             {plan.days.length > 1 && <h4>{day.name}</h4>}
             <ul className="program-list">
@@ -172,9 +188,13 @@ function LibraryCard({ plan, data, onCopy }: { plan: LibraryPlan; data: AppData;
                 );
               })}
             </ul>
+            <ProgramMap load={templateLoad(t, data.exercises)} ids={t.exercises.map((e) => e.exerciseId)} compact />
+            <button className="btn full" onClick={() => onStart({ ...t, id: newId() })}>
+              <IconPlay width={18} height={18} /> {plan.days.length > 1 ? `${day.name}: bugün başlat` : 'Bugün başlat'}
+            </button>
           </div>
-        ))}
-      </details>
+          );
+        })}
       {copied ? (
         <p className="lib-done">
           <IconCheck width={16} height={16} /> {justCopied ? 'Programlarına eklendi' : 'Programlarında var'}

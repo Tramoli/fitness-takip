@@ -379,11 +379,16 @@ export const templateName = (plan: LibraryPlan, day: LibraryDay) =>
 
 /** Hazır programın günlerini kullanıcının programlarına dönüştürür. */
 export function planToTemplates(plan: LibraryPlan, makeId: () => string): Template[] {
-  return plan.days.map((day) => ({
-    id: makeId(),
+  return plan.days.map((day) => dayTemplate(plan, day, makeId()));
+}
+
+/** Hazır programın tek günü (kopyalamadan başlatmak için de kullanılır). */
+export function dayTemplate(plan: LibraryPlan, day: LibraryDay, id: string): Template {
+  return {
+    id,
     name: templateName(plan, day),
     exercises: day.exercises.map((x) => ({ exerciseId: x.id, sets: x.sets[0], ...(x.reps ? { reps: x.reps[0] } : {}) })),
-  }));
+  };
 }
 
 export const rangeText = (r?: Range) => (!r ? 'tükenişe yakın' : r[0] === r[1] ? String(r[0]) : `${r[0]}–${r[1]}`);
