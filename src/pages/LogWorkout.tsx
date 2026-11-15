@@ -1,19 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { addDays, eachDayOfInterval, endOfISOWeek, format, parseISO, startOfISOWeek } from 'date-fns';
+import { addDays, differenceInCalendarDays, eachDayOfInterval, endOfISOWeek, format, parseISO, startOfISOWeek } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import type { AppData, Exercise, Workout } from '../types';
+import type { AppData, Exercise, Template, Workout } from '../types';
 import { newId } from '../store';
 import { GROUP_ORDER, groupColor } from '../exercises';
 import { formatKg, lastSetsFor } from '../stats';
 import { exerciseName, shortDate } from '../format';
 import {
+  draftFromSets,
+  draftFromTemplateExercise,
+  recentWorkouts,
+  templateFromWorkout,
+  type DraftSet,
+} from '../programs';
+import ExerciseSearch from '../ExerciseSearch';
+import {
   IconCheck,
   IconChevronLeft,
   IconChevronRight,
+  IconCopy,
   IconDown,
   IconMinus,
+  IconPlay,
   IconPlus,
-  IconSearch,
   IconTrash,
   IconUp,
 } from '../icons';
@@ -24,12 +33,12 @@ interface Props {
   data: AppData;
   upsertWorkout: (w: Workout) => void;
   addExercise: (name: string, muscleGroup?: string) => Exercise;
+  saveTemplate: (t: Template) => void;
+  /** Programlar sayfasından "Başlat" ile gelindiyse uygulanacak program. */
+  startTemplate?: Template;
+  onOpenPrograms: () => void;
 }
 
-interface DraftSet {
-  kg: string;
-  reps: string;
-}
 interface DraftExercise {
   key: string;
   exerciseId: string;
@@ -43,37 +52,41 @@ const toNum = (s: string) => {
 
 const NEW_EXERCISE = '__new__';
 
-/** Türkçe karakterleri sadeleştirir: "Şınav" ve "sinav" eşleşsin. */
-const normalize = (s: string) =>
-  s
-    .toLocaleLowerCase('tr')
-    .replace(/ş/g, 's')
-    .replace(/ı/g, 'i')
-    .replace(/ğ/g, 'g')
-    .replace(/ü/g, 'u')
-    .replace(/ö/g, 'o')
-    .replace(/ç/g, 'c')
-    .replace(/[-()]/g, ' ');
-
-export default function LogWorkout({ date, onDateChange, data, upsertWorkout, addExercise }: Props) {
+export default function LogWorkout({
+  date,
+  onDateChange,
+  data,
+  upsertWorkout,
+  addExercise,
+  saveTemplate,
+  startTemplate,
+  onOpenPrograms,
+}: Props) {
   const existing = data.workouts.find((w) => w.date === date);
   const [workoutId] = useState(() => existing?.id ?? newId());
   const [note, setNote] = useState(existing?.note ?? '');
-  const [items, setItems] = useState<DraftExercise[]>(() =>
-    (existing?.exercises ?? []).map((we) => ({
+  const [items, setItems] = useState<DraftExercise[]>(() => {
+    const base = (existing?.exercises ?? []).map((we) => ({
       key: newId(),
       exerciseId: we.exerciseId,
-      sets: we.sets.map((s) => ({ kg: String(s.kg), reps: String(s.reps) })),
-    })),
-  );
+      sets: draftFromSets(we.sets),
+    }));
+    const extra = (startTemplate?.exercises ?? []).map((te) => ({
+      key: newId(),
+      exerciseId: te.exerciseId,
+      sets: draftFromTemplateExercise(te, data.workouts, date),
+    }));
+    return [...base, ...extra];
+  });
   const [picker, setPicker] = useState('');
   const [newName, setNewName] = useState('');
   const [newGroup, setNewGroup] = useState('');
-  const [query, setQuery] = useState('');
+  const [templateName, setTemplateName] = useState<string | null>(null);
+  const [savedTemplate, setSavedTemplate] = useState('');
   const focusRef = useRef<string | null>(null);
 
-  // Her değişiklik otomatik kaydedilir.
-  const firstRun = useRef(true);
+  // Her değişiklik otomatik kaydedilir. Program uygulanarak açıldıysa ilk hâli de kaydedilir.
+  const firstRun = useRef(!startTemplate);
   useEffect(() => {
     if (firstRun.current) {
       firstRun.current = false;
@@ -99,6 +112,7 @@ export default function LogWorkout({ date, onDateChange, data, upsertWorkout, ad
 
   const exById = useMemo(() => new Map(data.exercises.map((e) => [e.id, e])), [data.exercises]);
   const datesWithWorkout = useMemo(() => new Set(data.workouts.map((w) => w.date)), [data.workouts]);
+  const recent = useMemo(() => recentWorkouts(data.workouts, date, 3), [data.workouts, date]);
 
   const groups = useMemo(() => {
     const map = new Map<string, Exercise[]>();
@@ -113,33 +127,6 @@ export default function LogWorkout({ date, onDateChange, data, upsertWorkout, ad
     };
     return [...map.entries()].sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0], 'tr'));
   }, [data.exercises]);
-
-  const matches = useMemo(() => {
-    const q = normalize(query.trim());
-    if (!q) return [];
-    const words = q.split(/\s+/);
-    // Sıralama: adı aramayla başlayanlar, sonra en çok kullandıkların,
-    // sonra listedeki sıra (varsayılan liste en yaygından aza doğru dizili).
-    const usage = new Map<string, number>();
-    for (const w of data.workouts)
-      for (const we of w.exercises) usage.set(we.exerciseId, (usage.get(we.exerciseId) ?? 0) + 1);
-    const order = new Map(data.exercises.map((e, i) => [e.id, i]));
-    return data.exercises
-      .filter((e) => {
-        const hay = normalize(`${e.name} ${e.muscleGroup ?? ''}`);
-        return words.every((w) => hay.includes(w));
-      })
-      .sort((a, b) => {
-        const sa = normalize(a.name).startsWith(q) ? 0 : 1;
-        const sb = normalize(b.name).startsWith(q) ? 0 : 1;
-        return (
-          sa - sb ||
-          (usage.get(b.id) ?? 0) - (usage.get(a.id) ?? 0) ||
-          order.get(a.id)! - order.get(b.id)!
-        );
-      })
-      .slice(0, 12);
-  }, [query, data.exercises, data.workouts]);
 
   const knownGroups = useMemo(
     () => [...new Set(data.exercises.map((e) => e.muscleGroup).filter(Boolean))] as string[],
@@ -156,8 +143,23 @@ export default function LogWorkout({ date, onDateChange, data, upsertWorkout, ad
       { key, exerciseId, sets: [{ kg: first ? String(first.kg) : '', reps: first ? String(first.reps) : '' }] },
     ]);
     setPicker('');
-    setQuery('');
   };
+
+  const copyWorkout = (w: Workout) =>
+    setItems((xs) => [
+      ...xs,
+      ...w.exercises.map((we) => ({ key: newId(), exerciseId: we.exerciseId, sets: draftFromSets(we.sets) })),
+    ]);
+
+  const applyTemplate = (t: Template) =>
+    setItems((xs) => [
+      ...xs,
+      ...t.exercises.map((te) => ({
+        key: newId(),
+        exerciseId: te.exerciseId,
+        sets: draftFromTemplateExercise(te, data.workouts, date),
+      })),
+    ]);
 
   const onPick = (value: string) => {
     if (value === NEW_EXERCISE) setPicker(NEW_EXERCISE);
@@ -172,6 +174,18 @@ export default function LogWorkout({ date, onDateChange, data, upsertWorkout, ad
     setNewName('');
     setNewGroup('');
     addItem(ex.id);
+  };
+
+  const saveAsTemplate = () => {
+    const name = templateName?.trim();
+    if (!name) return;
+    const exercises = items.map((it) => ({
+      exerciseId: it.exerciseId,
+      sets: it.sets.map((s) => ({ kg: toNum(s.kg), reps: Math.round(toNum(s.reps)) })),
+    }));
+    saveTemplate(templateFromWorkout(name, newId(), exercises));
+    setTemplateName(null);
+    setSavedTemplate(name);
   };
 
   const updateSet = (key: string, i: number, field: keyof DraftSet, value: string) =>
@@ -221,6 +235,18 @@ export default function LogWorkout({ date, onDateChange, data, upsertWorkout, ad
     0,
   );
 
+  const names = (ids: string[]) => {
+    const list = ids.map((id) => exById.get(id)?.name ?? 'Silinmiş hareket');
+    return list.length > 3 ? `${list.slice(0, 3).join(', ')} +${list.length - 3}` : list.join(', ');
+  };
+
+  const whenLabel = (w: Workout) => {
+    const days = differenceInCalendarDays(d, parseISO(w.date));
+    if (days === 7) return 'Geçen hafta bugün';
+    if (days === 1) return 'Dün';
+    return format(parseISO(w.date), 'd MMMM, EEEE', { locale: tr });
+  };
+
   return (
     <section className="page">
       <header className="day-hero">
@@ -228,9 +254,7 @@ export default function LogWorkout({ date, onDateChange, data, upsertWorkout, ad
           <span className="day-num">{format(d, 'd')}</span>
           <span className="day-meta">
             <span className="day-month">{format(d, 'MMMM yyyy', { locale: tr })}</span>
-            <span className="day-weekday">
-              {date === today ? 'Bugün' : format(d, 'EEEE', { locale: tr })}
-            </span>
+            <span className="day-weekday">{date === today ? 'Bugün' : format(d, 'EEEE', { locale: tr })}</span>
           </span>
           <label className="day-picker" title="Tarih seç">
             <input
@@ -247,7 +271,12 @@ export default function LogWorkout({ date, onDateChange, data, upsertWorkout, ad
           </button>
           {week.map((day) => {
             const key = format(day, 'yyyy-MM-dd');
-            const cls = ['wk-day', key === date ? 'sel' : '', key === today ? 'today' : '', datesWithWorkout.has(key) ? 'has' : '']
+            const cls = [
+              'wk-day',
+              key === date ? 'sel' : '',
+              key === today ? 'today' : '',
+              datesWithWorkout.has(key) ? 'has' : '',
+            ]
               .filter(Boolean)
               .join(' ');
             return (
@@ -280,6 +309,61 @@ export default function LogWorkout({ date, onDateChange, data, upsertWorkout, ad
           <span className="saved" title="Değişiklikler otomatik kaydedilir">
             <IconCheck width={16} height={16} /> Kaydedildi
           </span>
+        </div>
+      )}
+
+      {items.length === 0 && (
+        <div className="quick-start">
+          {data.templates.length > 0 && (
+            <section className="qs-block">
+              <h2 className="qs-title">Programla başla</h2>
+              <div className="qs-list">
+                {data.templates.map((t) => (
+                  <button key={t.id} className="qs-item" onClick={() => applyTemplate(t)}>
+                    <span className="qs-icon">
+                      <IconPlay width={18} height={18} />
+                    </span>
+                    <span className="qs-text">
+                      <span className="qs-name">{t.name}</span>
+                      <span className="qs-sub">{names(t.exercises.map((e) => e.exerciseId))}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {recent.length > 0 && (
+            <section className="qs-block">
+              <h2 className="qs-title">Önceki antrenmanı tekrarla</h2>
+              <div className="qs-list">
+                {recent.map((w) => (
+                  <button key={w.id} className="qs-item" onClick={() => copyWorkout(w)}>
+                    <span className="qs-icon">
+                      <IconCopy width={18} height={18} />
+                    </span>
+                    <span className="qs-text">
+                      <span className="qs-name">{whenLabel(w)}</span>
+                      <span className="qs-sub">{names(w.exercises.map((e) => e.exerciseId))}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {data.templates.length === 0 && recent.length === 0 && (
+            <div className="empty">
+              <p className="empty-title">Bugün ne çalıştın?</p>
+              <p className="muted">İlk hareketi aşağıdan ara ya da listeden seç.</p>
+            </div>
+          )}
+
+          {data.templates.length === 0 && (
+            <button className="link-btn" onClick={onOpenPrograms}>
+              Sık yaptığın antrenmanları program olarak kaydet
+            </button>
+          )}
         </div>
       )}
 
@@ -364,54 +448,16 @@ export default function LogWorkout({ date, onDateChange, data, upsertWorkout, ad
         );
       })}
 
-      {items.length === 0 && (
-        <div className="empty">
-          <p className="empty-title">Bugün ne çalıştın?</p>
-          <p className="muted">İlk hareketi aşağıdan ara ya da listeden seç.</p>
-        </div>
-      )}
-
-      <div className="adder">
-        <label className="search">
-          <IconSearch width={20} height={20} />
-          <input
-            type="search"
-            placeholder="Hareket ekle: squat, curl, şınav…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && matches[0] && addItem(matches[0].id)}
-            aria-label="Hareket ara"
-          />
-        </label>
-        {query.trim() && (
-          <div className="search-results">
-            {matches.map((e) => (
-              <button
-                key={e.id}
-                className="search-item"
-                onClick={() => addItem(e.id)}
-                style={{ ['--plate' as string]: groupColor(e.muscleGroup) }}
-              >
-                <span className="plate-dot" aria-hidden />
-                <span className="search-name">{e.name}</span>
-                <span className="muted small">{e.muscleGroup}</span>
-              </button>
-            ))}
-            {matches.length === 0 && <p className="muted small">Eşleşen hareket yok.</p>}
-            <button
-              className="search-item create"
-              onClick={() => {
-                setNewName(query.trim());
-                setQuery('');
-                setPicker(NEW_EXERCISE);
-              }}
-            >
-              <IconPlus width={18} height={18} /> “{query.trim()}” adında yeni hareket oluştur
-            </button>
-          </div>
-        )}
+      <ExerciseSearch
+        exercises={data.exercises}
+        workouts={data.workouts}
+        onPick={addItem}
+        onCreate={(name) => {
+          setNewName(name);
+          setPicker(NEW_EXERCISE);
+        }}
+      >
         <select
-          hidden={!!query.trim()}
           value={picker === NEW_EXERCISE ? NEW_EXERCISE : ''}
           onChange={(e) => onPick(e.target.value)}
           aria-label="Listeden hareket seç"
@@ -428,47 +474,76 @@ export default function LogWorkout({ date, onDateChange, data, upsertWorkout, ad
           ))}
           <option value={NEW_EXERCISE}>+ Yeni hareket oluştur</option>
         </select>
-        {picker === NEW_EXERCISE && (
+      </ExerciseSearch>
+
+      {picker === NEW_EXERCISE && (
+        <div className="new-exercise">
+          <input
+            placeholder="Hareket adı (ör. Hip Thrust)"
+            value={newName}
+            autoFocus
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && createExercise()}
+          />
+          <input
+            placeholder="Kas grubu (isteğe bağlı)"
+            list="muscle-groups"
+            value={newGroup}
+            onChange={(e) => setNewGroup(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && createExercise()}
+          />
+          <datalist id="muscle-groups">
+            {knownGroups.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
+          <div className="row">
+            <button className="btn" onClick={createExercise} disabled={!newName.trim()}>
+              Hareketi ekle
+            </button>
+            <button className="btn ghost" onClick={() => setPicker('')}>
+              Vazgeç
+            </button>
+          </div>
+        </div>
+      )}
+
+      {items.length > 0 &&
+        (templateName === null ? (
+          <div className="save-template">
+            <button className="link-btn" onClick={() => setTemplateName('')}>
+              Bu antrenmanı program olarak kaydet
+            </button>
+            {savedTemplate && (
+              <span className="saved">
+                <IconCheck width={16} height={16} /> “{savedTemplate}” kaydedildi
+              </span>
+            )}
+          </div>
+        ) : (
           <div className="new-exercise">
             <input
-              placeholder="Hareket adı (ör. Hip Thrust)"
-              value={newName}
+              placeholder="Program adı (ör. İtiş günü)"
+              value={templateName}
               autoFocus
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && createExercise()}
+              onChange={(e) => setTemplateName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveAsTemplate()}
+              aria-label="Program adı"
             />
-            <input
-              placeholder="Kas grubu (isteğe bağlı)"
-              list="muscle-groups"
-              value={newGroup}
-              onChange={(e) => setNewGroup(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && createExercise()}
-            />
-            <datalist id="muscle-groups">
-              {knownGroups.map((g) => (
-                <option key={g} value={g} />
-              ))}
-            </datalist>
             <div className="row">
-              <button className="btn" onClick={createExercise} disabled={!newName.trim()}>
-                Hareketi ekle
+              <button className="btn" onClick={saveAsTemplate} disabled={!templateName.trim()}>
+                Programı kaydet
               </button>
-              <button className="btn ghost" onClick={() => setPicker('')}>
+              <button className="btn ghost" onClick={() => setTemplateName(null)}>
                 Vazgeç
               </button>
             </div>
           </div>
-        )}
-      </div>
+        ))}
 
       <label className="note-field">
         <span>Not</span>
-        <textarea
-          rows={2}
-          placeholder="Uyku, enerji, ağrı…"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
+        <textarea rows={2} placeholder="Uyku, enerji, ağrı…" value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
     </section>
   );

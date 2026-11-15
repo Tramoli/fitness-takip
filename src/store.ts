@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AppData, Exercise, Workout } from './types';
+import type { AppData, Exercise, Template, Workout } from './types';
 import { DEFAULT_EXERCISES, mergeDefaultExercises } from './exercises';
 
 export { DEFAULT_EXERCISES };
@@ -8,7 +8,7 @@ const STORAGE_KEY = 'fitness-takip:v1';
 
 
 export function emptyData(): AppData {
-  return { version: 1, exercises: [...DEFAULT_EXERCISES], workouts: [] };
+  return { version: 1, exercises: [...DEFAULT_EXERCISES], workouts: [], templates: [] };
 }
 
 export function newId(): string {
@@ -22,7 +22,12 @@ export function parseData(raw: unknown): AppData {
   if (!Array.isArray(d.exercises) || !Array.isArray(d.workouts)) {
     throw new Error('Dosyada "exercises" ve "workouts" alanları bulunmalı');
   }
-  return { version: 1, exercises: mergeDefaultExercises(d.exercises), workouts: d.workouts };
+  return {
+    version: 1,
+    exercises: mergeDefaultExercises(d.exercises),
+    workouts: d.workouts,
+    templates: Array.isArray(d.templates) ? d.templates : [],
+  };
 }
 
 function load(): AppData {
@@ -69,7 +74,18 @@ export function useAppData() {
 
   const replaceAll = useCallback((next: AppData) => setData(next), []);
 
-  return { data, upsertWorkout, deleteWorkout, addExercise, replaceAll };
+  const saveTemplate = useCallback((t: Template) => {
+    setData((d) => {
+      const exists = d.templates.some((x) => x.id === t.id);
+      return { ...d, templates: exists ? d.templates.map((x) => (x.id === t.id ? t : x)) : [...d.templates, t] };
+    });
+  }, []);
+
+  const deleteTemplate = useCallback((id: string) => {
+    setData((d) => ({ ...d, templates: d.templates.filter((t) => t.id !== id) }));
+  }, []);
+
+  return { data, upsertWorkout, deleteWorkout, addExercise, replaceAll, saveTemplate, deleteTemplate };
 }
 
 export function exportData(data: AppData) {
