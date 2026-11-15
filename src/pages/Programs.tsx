@@ -3,6 +3,31 @@ import type { AppData, Exercise, Template, TemplateExercise } from '../types';
 import { newId } from '../store';
 import { groupColor } from '../exercises';
 import ExerciseSearch from '../ExerciseSearch';
+import BodyMap from '../BodyMap';
+import { emgCoverage, effectiveSets, sessionZone, templateLoad, type MuscleLoad } from '../muscles';
+
+const SESSION_LEGEND = [
+  { zone: 'low' as const, text: '2 setten az' },
+  { zone: 'mid' as const, text: '2–4' },
+  { zone: 'good' as const, text: '4–8 (etkili)' },
+  { zone: 'over' as const, text: '8 üstü (fazla)' },
+];
+
+/** Programın kas aktivasyonu: harita + ölçüm kapsamı notu. */
+function ProgramMap({ load, ids, compact }: { load: MuscleLoad; ids: string[]; compact?: boolean }) {
+  const cov = emgCoverage(ids);
+  return (
+    <div className="program-map">
+      <BodyMap load={load} zoneOf={sessionZone} legend={SESSION_LEGEND} scaleMax={10} compact={compact} />
+      {!compact && (
+        <p className="bm-note">
+          Renk, bir seansta o kasa düşen etkili set sayısını gösterir (set × kas aktivasyonu). Seans başına 6–8 set
+          tavanı aşılırsa kas taranır. {cov.total > 0 && `${cov.total} hareketin ${cov.emg} tanesi sEMG ölçümlerine dayanıyor, diğerleri benzer hareketlerden tahmin.`}
+        </p>
+      )}
+    </div>
+  );
+}
 import { IconDown, IconEdit, IconMinus, IconPlay, IconPlus, IconTrash, IconUp } from '../icons';
 
 interface Props {
@@ -83,6 +108,7 @@ export default function Programs({ data, saveTemplate, deleteTemplate, addExerci
               );
             })}
           </ul>
+          <ProgramMap load={templateLoad(t, data.exercises)} ids={t.exercises.map((e) => e.exerciseId)} compact />
           <button className="btn full" onClick={() => onStart(t)}>
             <IconPlay width={18} height={18} /> Bugün başlat
           </button>
@@ -216,6 +242,19 @@ function Editor({
         onCreate={(n) => add(addExercise(n).id)}
         placeholder="Programa hareket ekle…"
       />
+
+      {rows.length > 0 && (
+        <section className="panel">
+          <h2 className="chart-title">Kas aktivasyonu</h2>
+          <ProgramMap
+            load={effectiveSets(
+              rows.map((r) => ({ exerciseId: r.exerciseId, sets: r.sets })),
+              data.exercises,
+            )}
+            ids={rows.map((r) => r.exerciseId)}
+          />
+        </section>
+      )}
 
       <p className="muted small">
         Programı başlattığında setler son seferki ağırlıklarınla dolar. Hedef tekrarı boş bırakırsan son seferki tekrarlar

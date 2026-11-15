@@ -185,6 +185,8 @@ export const DEFAULT_EXERCISES: Exercise[] = [
   ]),
   ...G('Karın & Core', [
     ['crunch', 'Crunch'],
+    ['bicycle-crunch', 'Bicycle Crunch'],
+    ['reverse-crunch', 'Reverse Crunch'],
     ['cable-crunch', 'Cable Crunch'],
     ['machine-crunch', 'Crunch (Makine)'],
     ['decline-sit-up', 'Decline Sit-up'],

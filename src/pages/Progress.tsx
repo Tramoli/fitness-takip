@@ -13,7 +13,10 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 import type { AppData, Exercise, Level } from '../types';
+import { addDays, parseISO } from 'date-fns';
 import { LEVELS, exerciseScore, programScore, recommend, repRange } from '../overload';
+import BodyMap from '../BodyMap';
+import { weeklyZone, workoutsLoad } from '../muscles';
 import { exerciseProgress, formatKg, personalRecords, weeklyVolume } from '../stats';
 import { midDate, shortDate } from '../format';
 import { groupColor } from '../exercises';
@@ -82,6 +85,12 @@ const scoreWord = (n: number) => (n >= 85 ? 'Çok iyi' : n >= 70 ? 'İyi' : n >=
 export default function Progress({ data, updateExercise, setLevel }: Props) {
   const today = format(new Date(), 'yyyy-MM-dd');
   const level: Level = data.level ?? 'intermediate';
+  const weekFrom = format(addDays(parseISO(today), -6), 'yyyy-MM-dd');
+  const weekLoad = useMemo(
+    () => workoutsLoad(data.workouts, data.exercises, weekFrom, today),
+    [data.workouts, data.exercises, weekFrom, today],
+  );
+  const target = LEVELS[level].weeklySets;
   const program = useMemo(
     () => programScore(data.exercises, data.workouts, today, level),
     [data.exercises, data.workouts, today, level],
@@ -195,6 +204,25 @@ export default function Progress({ data, updateExercise, setLevel }: Props) {
         ) : (
           <p className="muted">Skor için son 4 haftada en az 2 antrenman gerekiyor.</p>
         )}
+      </div>
+
+      <div className="panel">
+        <h2 className="chart-title">Son 7 gün kas aktivasyonu</h2>
+        <BodyMap
+          load={weekLoad}
+          zoneOf={(n) => weeklyZone(n, target)}
+          scaleMax={target[1] + 4}
+          legend={[
+            { zone: 'low', text: `${target[0] / 2} setten az` },
+            { zone: 'mid', text: `${target[0] / 2}–${target[0]}` },
+            { zone: 'good', text: `${target[0]}–${target[1]} (hedef)` },
+            { zone: 'over', text: `${target[1]} üstü` },
+          ]}
+        />
+        <p className="bm-note">
+          Etkili set = set × o hareketin kası çalıştırma oranı ({LEVELS[level].label.toLocaleLowerCase('tr')} seviye için
+          haftalık hedef {target[0]}–{target[1]}). Bir kasa dokunarak değerini görebilirsin.
+        </p>
       </div>
 
       <div className="panel" style={{ ['--plate' as string]: groupColor(exGroup) }}>
