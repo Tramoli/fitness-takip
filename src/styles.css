@@ -1,0 +1,1011 @@
+/* ------------------------------------------------------------------
+   Fitness Takip — "plaka" tasarım sistemi
+   Kas grupları olimpik plaka renkleriyle kodlanır; plaka halkası
+   (ortası delik daire) uygulamanın tekrar eden işaretidir.
+------------------------------------------------------------------- */
+
+:root {
+  --font: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-num: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif;
+
+  --bg: #f3f4f1;
+  --surface: #ffffff;
+  --surface-2: #eceeea;
+  --ink: #16191d;
+  --on-ink: #f3f4f1;
+  --text: #16191d;
+  --muted: #6a707a;
+  --border: #dcdfda;
+  --hover: rgba(22, 25, 29, 0.05);
+
+  --plate-red: #d7263d;
+  --plate-blue: #1f5bd1;
+  --plate-yellow: #e8a800;
+  --plate-green: #1e9450;
+  --plate-grey: #9aa1ac;
+  --plate-black: #3a3f47;
+  --plate: var(--plate-black);
+
+  --success: #1e9450;
+  --danger: #d7263d;
+  --focus: #1f5bd1;
+
+  --r-lg: 20px;
+  --r-md: 14px;
+  --r-sm: 10px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11151b;
+    --surface: #1a2028;
+    --surface-2: #232a33;
+    --ink: #eef0f2;
+    --on-ink: #11151b;
+    --text: #eef0f2;
+    --muted: #8d96a3;
+    --border: #2b333d;
+    --hover: rgba(238, 240, 242, 0.06);
+
+    --plate-red: #f0485a;
+    --plate-blue: #4c82f0;
+    --plate-yellow: #f5c02e;
+    --plate-green: #39b96e;
+    --plate-grey: #a5adb8;
+    --plate-black: #67707c;
+
+    --success: #39b96e;
+    --danger: #f0485a;
+    --focus: #4c82f0;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 0.85rem;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* ---------- Kabuk ---------- */
+
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  min-height: 100dvh;
+}
+
+.content {
+  padding: calc(env(safe-area-inset-top) + 20px) 16px calc(112px + env(safe-area-inset-bottom));
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-title {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 2.5rem;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  text-transform: capitalize;
+}
+
+.panel {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: 16px;
+}
+
+/* Plaka halkası: tekrar eden işaret */
+.plate-dot,
+.lift-name::before,
+.entry-lifts li .ex-name::before,
+.legend li::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 4px solid var(--plate);
+  display: inline-block;
+}
+
+/* ---------- Düğmeler ---------- */
+
+.btn {
+  border: none;
+  background: var(--ink);
+  color: var(--on-ink);
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-weight: 600;
+  transition: transform 0.08s ease;
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.btn.secondary {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.btn.ghost {
+  background: transparent;
+  color: var(--muted);
+}
+
+.ghost-icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+}
+.ghost-icon:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.ghost-icon.sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+.ghost-icon.danger:hover {
+  color: var(--danger);
+}
+.ghost-icon:disabled {
+  opacity: 0.25;
+  cursor: default;
+  background: transparent;
+}
+
+/* ---------- Form alanları ---------- */
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-width: 0;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  outline: none;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ink);
+}
+textarea {
+  resize: vertical;
+}
+input[type='search']::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+/* ---------- Kaydet: gün başlığı ---------- */
+
+.day-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.day-title {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  border-radius: var(--r-md);
+}
+.day-num {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 5.5rem;
+  line-height: 0.8;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.day-meta {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 2px;
+}
+.day-month {
+  font-weight: 600;
+  font-size: 1.15rem;
+  text-transform: capitalize;
+}
+.day-weekday {
+  color: var(--muted);
+  text-transform: capitalize;
+}
+.day-picker {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+.day-picker input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  padding: 0;
+  border: none;
+}
+.day-picker input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.week-strip {
+  display: grid;
+  grid-template-columns: 32px repeat(7, 1fr) 32px;
+  align-items: center;
+  gap: 2px;
+}
+.week-strip .ghost-icon {
+  width: 32px;
+  height: 52px;
+}
+.wk-day {
+  position: relative;
+  min-width: 0;
+  padding: 0;
+  height: 58px;
+  border: none;
+  background: transparent;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+.wk-day:hover {
+  background: var(--hover);
+}
+.wk-name {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+.wk-num {
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+.wk-day.has::after {
+  content: '';
+  position: absolute;
+  bottom: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.wk-day.today .wk-num {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+.wk-day.sel {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.wk-day.sel .wk-name {
+  color: inherit;
+  opacity: 0.7;
+}
+
+/* ---------- Kaydet: toplamlar ---------- */
+
+.totals {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 0 2px;
+}
+.totals > div {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.totals .num {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 1.75rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.totals .unit {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.saved {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--success);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* ---------- Kaydet: hareket kartı ---------- */
+
+.lift {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: 14px 14px 12px;
+}
+.lift-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.lift-name {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  align-items: center;
+  padding-top: 4px;
+  min-width: 0;
+}
+.lift-name h3 {
+  font-size: 1.12rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.lift-group {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.lift-tools {
+  display: flex;
+  gap: 0;
+  flex: none;
+}
+.last-time {
+  margin: 8px 0 2px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.last-set {
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 0 6px;
+}
+
+.set-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.set {
+  display: grid;
+  grid-template-columns: 22px 1fr 14px 1fr 34px;
+  align-items: center;
+  gap: 6px;
+}
+.set-idx {
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--muted);
+  text-align: center;
+}
+.set-x {
+  font-family: var(--font-num);
+  color: var(--muted);
+  text-align: center;
+  font-size: 1.2rem;
+}
+.set-field {
+  position: relative;
+  display: block;
+}
+.set-field input {
+  height: 54px;
+  padding: 0 44px 0 12px;
+  background: var(--surface-2);
+  border-color: transparent;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.set-field input:focus {
+  border-color: var(--ink);
+  background: var(--surface);
+}
+.set-field input::placeholder {
+  color: var(--muted);
+  opacity: 0.5;
+}
+.set-unit {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.78rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.add-set {
+  margin-top: 10px;
+  width: 100%;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--r-md);
+  background: transparent;
+  font-weight: 600;
+}
+.add-set:hover {
+  border-color: var(--ink);
+}
+
+/* ---------- Kaydet: hareket ekleme ---------- */
+
+.adder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.search {
+  position: relative;
+  display: block;
+}
+.search svg {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.search input {
+  height: 56px;
+  padding-left: 46px;
+  border-radius: 999px;
+  border-color: var(--ink);
+  font-size: 1.02rem;
+}
+.adder > select {
+  border-radius: 999px;
+  height: 46px;
+  padding: 0 16px;
+  background: transparent;
+  color: var(--muted);
+}
+.adder > select[hidden] {
+  display: none;
+}
+
+.search-results {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.search-results > p {
+  padding: 12px 16px;
+}
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  padding: 13px 16px;
+}
+.search-item:last-child {
+  border-bottom: none;
+}
+.search-item:hover {
+  background: var(--hover);
+}
+.search-name {
+  flex: 1;
+  font-weight: 500;
+}
+.search-item.create {
+  font-weight: 600;
+}
+
+.new-exercise {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.note-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.note-field > span {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.note-field textarea {
+  background: var(--surface);
+  border-color: transparent;
+}
+
+.empty {
+  padding: 28px 20px;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.empty-title {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 1.5rem;
+}
+
+/* ---------- Geçmiş ---------- */
+
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.entry {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 10px;
+}
+.entry-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+  text-transform: capitalize;
+}
+.entry-day {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 2.2rem;
+  line-height: 0.9;
+}
+.entry-mon {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.entry-wd {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.entry-body {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: 12px 12px 14px 14px;
+  min-width: 0;
+}
+.entry-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.entry-stats {
+  display: flex;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.entry-stats b {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: var(--text);
+}
+.entry-lifts {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.entry-lift-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.entry-lifts .ex-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.entry-lifts .ex-name::before {
+  width: 12px;
+  height: 12px;
+  border-width: 3.5px;
+}
+.ex-sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 0 20px;
+}
+.chip {
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 0.98rem;
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 0 7px;
+  font-variant-numeric: tabular-nums;
+}
+.note {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.backup {
+  margin-top: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.backup h2 {
+  font-size: 1.05rem;
+}
+.backup p {
+  font-size: 0.88rem;
+  max-width: 60ch;
+}
+
+/* ---------- İlerleme ---------- */
+
+.lift-select {
+  font-weight: 600;
+  font-size: 1.05rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border-color: transparent;
+  height: 48px;
+  padding: 0 16px;
+}
+
+.hero-stat {
+  margin-top: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
+}
+.hero-num {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 5rem;
+  line-height: 0.85;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.hero-unit {
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 1.6rem;
+  color: var(--muted);
+}
+.hero-caption {
+  flex-basis: 100%;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.records {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin: 16px 0 0;
+  background: var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.records > div {
+  background: var(--surface);
+  padding: 10px 2px;
+}
+.records > div + div {
+  padding-left: 14px;
+}
+.records dt {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.records dd {
+  margin: 0;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 1.45rem;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.records dd.rec-date {
+  font-family: var(--font);
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.chart-title {
+  margin: 22px 0 10px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.panel > .chart-title:first-child {
+  margin-top: 0;
+}
+.panel > .records:nth-child(2) {
+  margin: 0 0 14px;
+}
+.chart {
+  width: 100%;
+  min-width: 0;
+}
+.recharts-legend-item-text {
+  color: var(--muted) !important;
+}
+
+/* ---------- Takvim ---------- */
+
+.cal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+.cal-head .page-title .muted {
+  font-weight: 500;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+.cal-wd {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+  padding: 2px 0 6px;
+}
+.cal-day {
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-num);
+  font-weight: 600;
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+.cal-day > span {
+  width: min(40px, 100%);
+  height: min(40px, 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cal-day:hover > span {
+  background: var(--hover);
+}
+.cal-day.other {
+  color: var(--muted);
+  opacity: 0.4;
+}
+.cal-day.has > span {
+  border: 5px solid var(--plate);
+  font-weight: 700;
+}
+.cal-day.today > span {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+
+.panel > .records {
+  margin-top: 14px;
+}
+
+.legend {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend li::before {
+  width: 12px;
+  height: 12px;
+  border-width: 3.5px;
+}
+
+/* ---------- Alt gezinme ---------- */
+
+.tabbar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 480px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 6px;
+  gap: 4px;
+  background: var(--ink);
+  border-radius: 999px;
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.45);
+  z-index: 10;
+}
+.tabbar button {
+  border: none;
+  background: transparent;
+  color: var(--on-ink);
+  opacity: 0.6;
+  height: 52px;
+  border-radius: 999px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+.tabbar button svg {
+  width: 21px;
+  height: 21px;
+}
+.tabbar button.active {
+  opacity: 1;
+  background: var(--on-ink);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+@media (max-width: 360px) {
+  .day-num {
+    font-size: 4.5rem;
+  }
+  .set {
+    grid-template-columns: 18px 1fr 10px 1fr 30px;
+    gap: 4px;
+  }
+  .set-field input {
+    padding-right: 38px;
+    font-size: 1.4rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
