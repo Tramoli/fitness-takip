@@ -4,6 +4,7 @@ import { newId } from '../store';
 import { groupColor } from '../exercises';
 import ExerciseSearch from '../ExerciseSearch';
 import BodyMap from '../BodyMap';
+import { LIBRARY, planToTemplates, rangeText, templateName, type LibraryPlan } from '../library';
 import { emgCoverage, effectiveSets, sessionZone, templateLoad, type MuscleLoad } from '../muscles';
 
 const SESSION_LEGEND = [
@@ -28,7 +29,7 @@ function ProgramMap({ load, ids, compact }: { load: MuscleLoad; ids: string[]; c
     </div>
   );
 }
-import { IconDown, IconEdit, IconMinus, IconPlay, IconPlus, IconTrash, IconUp } from '../icons';
+import { IconCheck, IconCopy, IconDown, IconEdit, IconMinus, IconPlay, IconPlus, IconTrash, IconUp } from '../icons';
 
 interface Props {
   data: AppData;
@@ -71,8 +72,8 @@ export default function Programs({ data, saveTemplate, deleteTemplate, addExerci
         <div className="empty">
           <p className="empty-title">Henüz program yok</p>
           <p className="muted">
-            Sık yaptığın antrenmanı bir kez program olarak kaydet; sonraki seferlerde tek dokunuşla başla. Hareketler son
-            seferki ağırlıklarınla dolu gelir.
+            Kendi programını oluştur ya da aşağıdaki hazır programlardan birini kopyala. Hareketler son seferki
+            ağırlıklarınla dolu gelir.
           </p>
         </div>
       )}
@@ -114,7 +115,82 @@ export default function Programs({ data, saveTemplate, deleteTemplate, addExerci
           </button>
         </article>
       ))}
+
+      <section className="library">
+        <h2 className="section-title">Hazır programlar</h2>
+        <p className="muted small">
+          Hipertrofi araştırmalarındaki programlar. Kopyalayınca her gün ayrı bir program olarak eklenir; set ve tekrar
+          aralığın alt sınırından başlar, istediğin gibi düzenleyebilirsin.
+        </p>
+        {LIBRARY.map((plan) => (
+          <LibraryCard
+            key={plan.id}
+            plan={plan}
+            data={data}
+            onCopy={() => planToTemplates(plan, newId).forEach(saveTemplate)}
+          />
+        ))}
+      </section>
     </section>
+  );
+}
+
+function LibraryCard({ plan, data, onCopy }: { plan: LibraryPlan; data: AppData; onCopy: () => void }) {
+  const exById = new Map(data.exercises.map((e) => [e.id, e]));
+  const names = new Set(data.templates.map((t) => t.name));
+  const copied = plan.days.every((d) => names.has(templateName(plan, d)));
+  const [justCopied, setJustCopied] = useState(false);
+  return (
+    <article className="program lib-card">
+      <h3 className="program-name">{plan.name}</h3>
+      <p className="lib-meta">
+        <span>{plan.level}</span>
+        <span>{plan.frequency}</span>
+      </p>
+      <p className="muted small">{plan.about}</p>
+      <details className="lib-days">
+        <summary>
+          {plan.days.length > 1 ? `${plan.days.length} günü gör` : 'Hareketleri gör'}
+        </summary>
+        {plan.days.map((day) => (
+          <div key={day.name} className="lib-day">
+            {plan.days.length > 1 && <h4>{day.name}</h4>}
+            <ul className="program-list">
+              {day.exercises.map((x, i) => {
+                const ex = exById.get(x.id);
+                return (
+                  <li key={i} style={{ ['--plate' as string]: groupColor(ex?.muscleGroup) }}>
+                    <span className="plate-dot" aria-hidden />
+                    <span className="program-ex">
+                      {ex?.name ?? x.id}
+                      {x.note && <span className="lib-note">{x.note}</span>}
+                    </span>
+                    <span className="program-target">
+                      {rangeText(x.sets)} × {rangeText(x.reps)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </details>
+      {copied ? (
+        <p className="lib-done">
+          <IconCheck width={16} height={16} /> {justCopied ? 'Programlarına eklendi' : 'Programlarında var'}
+        </p>
+      ) : (
+        <button
+          className="btn secondary full"
+          onClick={() => {
+            onCopy();
+            setJustCopied(true);
+          }}
+        >
+          <IconCopy width={18} height={18} /> Programlarıma kopyala
+        </button>
+      )}
+    </article>
   );
 }
 
